@@ -30,7 +30,7 @@ pub enum Component {
 
 pub use Component::*;
 
-use super::{GpuCmd, GpuCmdByMut, Root};
+use super::{mask, GpuCmd, GpuCmdByMut, Root};
 
 ///https://www.3dbrew.org/wiki/GPU/Internal_Registers#GPUREG_SH_OUTMAP_Oi
 #[derive(Clone, Copy)]
@@ -53,11 +53,13 @@ pub(crate) fn reset() -> impl GpuCmdByMut + Clone + Copy {
         + OutMapTotal(0)
 }
 
+//TODO: Utilise Consecutive Writing Mode
+
 impl GpuCmd for OutMapTotal {
     type Out = [u32; 2];
 
     fn cmd(self) -> Self::Out {
-        [GPUREG_SH_OUTMAP_TOTAL, self.0]
+        [self.0, GPUREG_SH_OUTMAP_TOTAL | mask(0xF)]
     }
 }
 
@@ -65,8 +67,8 @@ impl GpuCmd for OutMap {
     type Out = [u32; 2];
     fn cmd(self) -> Self::Out {
         [
-            GPUREG_SH_OUTMAP_O0 + self.0,
             u32::from_le_bytes([self.1 as u8, self.2 as u8, self.3 as u8, self.4 as u8]),
+            (GPUREG_SH_OUTMAP_O0 + self.0) | mask(0xF),
         ]
     }
 }

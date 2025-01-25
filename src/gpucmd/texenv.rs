@@ -1,7 +1,7 @@
 use ctru_sys::*;
 use std::alloc::Allocator;
 
-use super::GpuCmdByMut;
+use super::{mask, GpuCmdByMut};
 
 #[derive(Clone, Copy, PartialEq, Eq, Debug)]
 #[repr(u32)]
@@ -46,7 +46,7 @@ pub trait TexEnvCmd {
 impl<A: TexEnvCmd> TexEnvCmdByMut for A {
     fn te_cmd_by_mut<Alloc: Allocator>(self, texenv: TexEnv, buf: &mut Vec<u32, Alloc>) {
         let (cmd_offset, cmd_param) = self.te_cmd();
-        buf.extend_from_slice(&[texenv.base() + cmd_offset, cmd_param]);
+        buf.extend_from_slice(&[cmd_param, (texenv.base() + cmd_offset) | mask(0xF)]);
     }
 }
 

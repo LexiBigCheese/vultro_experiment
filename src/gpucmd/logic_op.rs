@@ -1,5 +1,5 @@
 use ctru_sys::*;
-use super::GpuCmd;
+use super::{mask, GpuCmd};
 
 #[derive(Clone, Copy,PartialEq, Eq, Debug)]
 #[repr(u32)]
@@ -43,6 +43,6 @@ pub use LogicOp::*;
 impl GpuCmd for LogicOp {
     type Out = [u32;2];
     fn cmd(self) -> Self::Out {
-        [GPUREG_LOGIC_OP,self as u32]
+        [self as u32,GPUREG_LOGIC_OP | mask(0xF)]
     }
 }

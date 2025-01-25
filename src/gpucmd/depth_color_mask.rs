@@ -1,5 +1,5 @@
 use ctru_sys::*;
-use super::GpuCmd;
+use super::{mask, GpuCmd};
 
 #[derive(Clone,Copy)]
 #[repr(u32)]
@@ -32,14 +32,14 @@ pub struct DepthColorMask {
 impl GpuCmd for DepthColorMask {
     type Out = [u32;2];
     fn cmd(self) -> Self::Out {
-        [GPUREG_DEPTH_COLOR_MASK,
-          if self.enabled {1} else {0}
+        [if self.enabled {1} else {0}
           | ((self.function as u32) << 4)
           | if self.red_write {1 << 8} else {0}
           | if self.green_write {1 << 9} else {0}
           | if self.blue_write {1 << 10} else {0}
           | if self.alpha_write {1 << 11} else {0}
-          | if self.depth_write {1 << 12} else {0}
+          | if self.depth_write {1 << 12} else {0},
+          GPUREG_DEPTH_COLOR_MASK | mask(0xF)
         ]
     }
 }

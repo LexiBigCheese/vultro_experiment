@@ -1,6 +1,6 @@
 use ctru_sys::{GPUREG_BLEND_FUNC, GPUREG_FRAGOP_ALPHA_TEST};
 
-use super::GpuCmd;
+use super::{mask, GpuCmd};
 
 #[derive(Clone, Copy)]
 #[repr(u8)]
@@ -72,13 +72,13 @@ impl GpuCmd for Blend {
 
     fn cmd(self) -> Self::Out {
         [
-            GPUREG_BLEND_FUNC,
             u32::from_le_bytes([
                 self.color_eq as u8,
                 self.alpha_eq as u8,
                 self.color_src as u8 | ((self.color_dst as u8) << 4),
                 self.alpha_src as u8 | ((self.alpha_dst as u8) << 4),
             ]),
+            GPUREG_BLEND_FUNC | mask(0xF),
         ]
     }
 }
@@ -91,7 +91,7 @@ const GPUREG_BLEND_COLOR: u32 = 0x0103;
 impl GpuCmd for Color {
     type Out = [u32; 2];
     fn cmd(self) -> Self::Out {
-        [GPUREG_BLEND_COLOR, self.0]
+        [self.0, GPUREG_BLEND_COLOR | mask(0xF)]
     }
 }
 
@@ -131,10 +131,10 @@ impl GpuCmd for Test {
     type Out = [u32; 2];
     fn cmd(self) -> Self::Out {
         [
-            GPUREG_FRAGOP_ALPHA_TEST,
             if self.enabled { 0 } else { 1 }
                 | ((self.function as u32) << 4)
                 | ((self.reference_value as u32) << 8),
+            GPUREG_FRAGOP_ALPHA_TEST | mask(0xF),
         ]
     }
 }
