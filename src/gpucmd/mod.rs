@@ -2,6 +2,7 @@ pub mod depth_map;
 pub mod cull_face;
 pub mod shader_outmap;
 pub mod alpha;
+pub mod logic_op;
 
 use std::alloc::Allocator;
 
