@@ -5,6 +5,7 @@ pub mod alpha;
 pub mod logic_op;
 pub mod color_operation;
 pub mod texenv;
+pub mod depth_color_mask;
 
 use std::alloc::Allocator;
 
