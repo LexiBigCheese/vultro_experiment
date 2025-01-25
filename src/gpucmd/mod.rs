@@ -4,6 +4,7 @@ pub mod shader_outmap;
 pub mod alpha;
 pub mod logic_op;
 pub mod color_operation;
+pub mod texenv;
 
 use std::alloc::Allocator;
 
