@@ -11,6 +11,8 @@ pub enum Equation {
     Max,
 }
 
+pub use Equation::*;
+
 ///This is a nibble (half-byte)
 #[repr(u8)]
 pub enum Factor {
@@ -31,13 +33,35 @@ pub enum Factor {
     SaturatedAlpha,
 }
 
+pub use Factor::*;
+
 pub struct Blend {
+    pub color_eq: Equation,
+    pub alpha_eq: Equation,
+    pub color_src: Factor,
+    pub color_dst: Factor,
+    pub alpha_src: Factor,
+    pub alpha_dst: Factor,
+}
+
+impl Blend {
+    pub fn new(
     color_eq: Equation,
     alpha_eq: Equation,
     color_src: Factor,
     color_dst: Factor,
     alpha_src: Factor,
     alpha_dst: Factor,
+    ) -> Self {
+            Blend {
+            color_eq,
+            alpha_eq,
+            color_src,
+            color_dst,
+            alpha_src,
+            alpha_dst,
+            }
+    }
 }
 
 impl GpuCmd for Blend {
@@ -56,7 +80,7 @@ impl GpuCmd for Blend {
     }
 }
 
-pub struct Color(u32);
+pub struct Color(pub u32);
 
 const GPUREG_BLEND_COLOR: u32 = 0x0103;
 

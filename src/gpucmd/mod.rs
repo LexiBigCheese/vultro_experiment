@@ -51,6 +51,12 @@ impl<T:GpuCmdByMut,A:Allocator> std::ops::Add<T> for CommandEncoder<A> {
     }
 }
 
+impl<T:GpuCmdByMut,A:Allocator> std::ops::AddAssign<T> for CommandEncoder<A> {
+    fn add_assign(&mut self, rhs: T) {
+        rhs.cmd_by_mut(&mut self.buf.buf);
+    }
+}
+
 impl<T:GpuCmdDisableByMut,A:Allocator> std::ops::Sub<T> for CommandEncoder<A> {
     type Output = CommandEncoder<A>;
     fn sub(mut self, rhs: T) -> Self::Output {

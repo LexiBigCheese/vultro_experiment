@@ -36,20 +36,18 @@ pub(crate) struct OutMap(u32, Component, Component, Component, Component);
 ///https://www.3dbrew.org/wiki/GPU/Internal_Registers#GPUREG_SH_OUTMAP_TOTAL
 pub(crate) struct OutMapTotal(u32);
 
-impl OutMap {
-    pub(crate) fn unused(reg: u32) -> Self {
-        OutMap(reg, Unused, Unused, Unused, Unused)
-    }
-    pub(crate) fn reset() -> impl GpuCmdByMut {
-        Root + OutMap::unused(0)
-            + OutMap::unused(1)
-            + OutMap::unused(2)
-            + OutMap::unused(3)
-            + OutMap::unused(4)
-            + OutMap::unused(5)
-            + OutMap::unused(6)
-            + OutMapTotal(0)
-    }
+pub(crate) fn unused(reg: u32) -> OutMap {
+    OutMap(reg, Unused, Unused, Unused, Unused)
+}
+pub(crate) fn reset() -> impl GpuCmdByMut {
+    Root + unused(0)
+        + unused(1)
+        + unused(2)
+        + unused(3)
+        + unused(4)
+        + unused(5)
+        + unused(6)
+        + OutMapTotal(0)
 }
 
 impl GpuCmd for OutMapTotal {
