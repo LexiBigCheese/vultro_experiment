@@ -62,17 +62,17 @@ pub struct Cons<A,B>(A,B);
 pub struct ConsNeg<A,B>(A,B);
 pub struct Root;
 
-impl<A:GpuCmdByMut,B:GpuCmdByMut,Alloc:Allocator> std::ops::Add<Cons<A,B>> for CommandEncoder<Alloc> {
-    type Output = CommandEncoder<Alloc>;
-    fn add(self, rhs: Cons<A,B>) -> Self::Output {
-        self + rhs.0 + rhs.1
+impl<A:GpuCmdByMut,B:GpuCmdByMut> GpuCmdByMut for Cons<A,B> {
+    fn cmd_by_mut<Alloc:Allocator>(self, buf: &mut Vec<u32,Alloc>) {
+        self.0.cmd_by_mut(buf);
+        self.1.cmd_by_mut(buf);
     }
 }
 
-impl<A:GpuCmdByMut,B:GpuCmdDisableByMut,Alloc:Allocator> std::ops::Add<ConsNeg<A,B>> for CommandEncoder<Alloc> {
-    type Output = CommandEncoder<Alloc>;
-    fn add(self, rhs: ConsNeg<A,B>) -> Self::Output {
-        self + rhs.0 - rhs.1
+impl<A:GpuCmdByMut,B:GpuCmdDisableByMut> GpuCmdByMut for ConsNeg<A,B> {
+    fn cmd_by_mut<Alloc:Allocator>(self, buf: &mut Vec<u32,Alloc>) {
+        self.0.cmd_by_mut(buf);
+        self.1.cmd_disable_by_mut(buf);
     }
 }
 

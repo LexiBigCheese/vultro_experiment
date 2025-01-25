@@ -1,4 +1,4 @@
-use super::{GpuCmd, GpuCmdDisable};
+use super::{GpuCmd, GpuCmdByMut, GpuCmdDisable,Root};
 use ctru_sys::*;
 
 pub struct Enabled;
@@ -33,4 +33,8 @@ impl GpuCmd for Offset {
     fn cmd(self) -> Self::Out {
         [GPUREG_DEPTHMAP_OFFSET, unsafe{f32tof24(self.0)}]
     }
+}
+
+pub fn EnabledScaleOffset(scale: f32,offset: f32) -> impl GpuCmdByMut {
+    Root + Enabled + Scale(scale) + Offset(offset)
 }
