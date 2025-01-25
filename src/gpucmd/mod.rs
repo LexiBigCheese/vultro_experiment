@@ -6,9 +6,11 @@ pub mod logic_op;
 pub mod color_operation;
 pub mod texenv;
 pub mod depth_color_mask;
+pub mod transfer;
 
 use std::alloc::Allocator;
 
+///Note: The Buffer **MUST** be `0x10` aligned!
 pub struct CommandBuffer<A> where A:Allocator {
     pub buf: Vec<u32,A>
 }
