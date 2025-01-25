@@ -125,3 +125,13 @@ impl<A:GpuCmdDisableByMut> std::ops::Sub<A> for Root {
         ConsNeg(Root,rhs)
     }
 }
+
+pub const fn mask(m: u32) -> u32 {
+    (m & 0xF) << 16
+}
+
+pub const fn extra_params(n: u32) -> u32 {
+    (n & 0xFF) << 20
+}
+
+pub const CONSECUTIVE_WRITING: u32 = 1 << 31;
