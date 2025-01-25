@@ -108,6 +108,8 @@ pub enum Function {
     GreaterThanOrEqual,
 }
 
+///In modern engines, you might know this as Alpha Clip or Alpha Threshold
+#[doc(alias = "Clip")]
 #[derive(Clone, Copy)]
 pub struct Test {
     pub enabled: bool,
