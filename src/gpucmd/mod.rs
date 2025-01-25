@@ -69,8 +69,11 @@ impl<T:GpuCmdDisableByMut,A:Allocator> std::ops::Sub<T> for CommandEncoder<A> {
 }
 
 
+#[derive(Clone, Copy)]
 pub struct Cons<A,B>(A,B);
+#[derive(Clone, Copy)]
 pub struct ConsNeg<A,B>(A,B);
+#[derive(Clone, Copy)]
 pub struct Root;
 
 impl<A:GpuCmdByMut,B:GpuCmdByMut> GpuCmdByMut for Cons<A,B> {

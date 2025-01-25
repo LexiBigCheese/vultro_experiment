@@ -1,6 +1,7 @@
 use ctru_sys::*;
 use super::GpuCmd;
 
+#[derive(Clone, Copy,PartialEq, Eq, Debug)]
 #[repr(u32)]
 pub enum LogicOp {
     /// `0`

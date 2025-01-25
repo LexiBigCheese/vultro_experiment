@@ -3,6 +3,7 @@ use ctru_sys::*;
 
 ///Subtract to Disable
 #[doc(alias = "Disable")]
+#[derive(Clone, Copy,PartialEq, Eq)]
 pub struct Enabled;
 
 impl GpuCmd for Enabled {
@@ -19,6 +20,7 @@ impl GpuCmdDisable for Enabled {
     }
 }
 
+#[derive(Clone, Copy)]
 pub struct Scale(pub f32);
 
 impl GpuCmd for Scale {
@@ -28,6 +30,7 @@ impl GpuCmd for Scale {
     }
 }
 
+#[derive(Clone, Copy)]
 pub struct Offset(pub f32);
 
 impl GpuCmd for Offset {
@@ -37,6 +40,6 @@ impl GpuCmd for Offset {
     }
 }
 
-pub fn EnabledScaleOffset(scale: f32, offset: f32) -> impl GpuCmdByMut {
+pub fn EnabledScaleOffset(scale: f32, offset: f32) -> impl GpuCmdByMut + Clone + Copy {
     Root + Enabled + Scale(scale) + Offset(offset)
 }

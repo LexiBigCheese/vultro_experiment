@@ -2,6 +2,7 @@ use ctru_sys::*;
 
 use super::GpuCmd;
 
+#[derive(Clone, Copy)]
 pub struct No;
 
 impl GpuCmd for No {
@@ -11,6 +12,7 @@ impl GpuCmd for No {
     }
 }
 
+#[derive(Clone, Copy)]
 pub struct FrontCCW;
 
 impl GpuCmd for FrontCCW {
@@ -20,6 +22,7 @@ impl GpuCmd for FrontCCW {
     }
 }
 
+#[derive(Clone, Copy)]
 pub struct BackCCW;
 
 impl GpuCmd for BackCCW {

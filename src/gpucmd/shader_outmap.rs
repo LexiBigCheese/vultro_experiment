@@ -1,5 +1,6 @@
 use ctru_sys::*;
 
+#[derive(Clone, Copy)]
 #[repr(u8)]
 pub enum Component {
     PositionX,
@@ -32,14 +33,16 @@ pub use Component::*;
 use super::{GpuCmd, GpuCmdByMut, Root};
 
 ///https://www.3dbrew.org/wiki/GPU/Internal_Registers#GPUREG_SH_OUTMAP_Oi
+#[derive(Clone, Copy)]
 pub(crate) struct OutMap(u32, Component, Component, Component, Component);
 ///https://www.3dbrew.org/wiki/GPU/Internal_Registers#GPUREG_SH_OUTMAP_TOTAL
+#[derive(Clone, Copy)]
 pub(crate) struct OutMapTotal(u32);
 
 pub(crate) fn unused(reg: u32) -> OutMap {
     OutMap(reg, Unused, Unused, Unused, Unused)
 }
-pub(crate) fn reset() -> impl GpuCmdByMut {
+pub(crate) fn reset() -> impl GpuCmdByMut + Clone + Copy {
     Root + unused(0)
         + unused(1)
         + unused(2)

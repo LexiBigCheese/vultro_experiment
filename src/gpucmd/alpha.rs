@@ -2,6 +2,7 @@ use ctru_sys::GPUREG_BLEND_FUNC;
 
 use super::GpuCmd;
 
+#[derive(Clone, Copy)]
 #[repr(u8)]
 pub enum Equation {
     Add,
@@ -14,6 +15,7 @@ pub enum Equation {
 pub use Equation::*;
 
 ///This is a nibble (half-byte)
+#[derive(Clone, Copy)]
 #[repr(u8)]
 pub enum Factor {
     Zero,
@@ -35,6 +37,7 @@ pub enum Factor {
 
 pub use Factor::*;
 
+#[derive(Clone, Copy)]
 pub struct Blend {
     pub color_eq: Equation,
     pub alpha_eq: Equation,
@@ -80,6 +83,7 @@ impl GpuCmd for Blend {
     }
 }
 
+#[derive(Clone, Copy)]
 pub struct Color(pub u32);
 
 const GPUREG_BLEND_COLOR: u32 = 0x0103;

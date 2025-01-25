@@ -1,6 +1,7 @@
 use ctru_sys::*;
 use super::GpuCmd;
 
+#[derive(Clone, Copy)]
 #[repr(u8)]
 pub enum FragOp {
     Default,
@@ -8,12 +9,14 @@ pub enum FragOp {
     Shadow
 }
 
+#[derive(Clone, Copy)]
 #[repr(u8)]
 pub enum BlendMode {
     LogicOp,
     Blend
 }
 
+#[derive(Clone, Copy)]
 pub struct ColorOperation(pub FragOp, pub BlendMode);
 
 impl GpuCmd for ColorOperation {
