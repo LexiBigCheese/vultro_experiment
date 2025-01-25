@@ -3,6 +3,7 @@ pub mod cull_face;
 pub mod shader_outmap;
 pub mod alpha;
 pub mod logic_op;
+pub mod color_operation;
 
 use std::alloc::Allocator;
 
