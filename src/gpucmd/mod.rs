@@ -12,18 +12,20 @@ pub struct CommandEncoder {
 }
 
 pub trait GpuCmd {
-    fn cmd(&self) -> Vec<u32>;
+    type Out: AsRef<[u32]>;
+    fn cmd(&self) -> Self::Out;
 }
 
 pub trait GpuCmdDisable {
-    fn cmd_disable(&self) -> Vec<u32>;
+    type Out: AsRef<[u32]>;
+    fn cmd_disable(&self) -> Self::Out;
 }
 
 impl<T:GpuCmd> std::ops::Add<T> for CommandEncoder {
     type Output = CommandEncoder;
     fn add(mut self, rhs: T) -> Self::Output {
         let other = rhs.cmd();
-        self.buf.buf.extend_from_slice(&other);
+        self.buf.buf.extend_from_slice(other.as_ref());
         self
     }
 }
@@ -32,7 +34,7 @@ impl<T:GpuCmdDisable> std::ops::Sub<T> for CommandEncoder {
     type Output = CommandEncoder;
     fn sub(mut self, rhs: T) -> Self::Output {
         let other = rhs.cmd_disable();
-        self.buf.buf.extend_from_slice(&other);
+        self.buf.buf.extend_from_slice(other.as_ref());
         self
     }
 }
