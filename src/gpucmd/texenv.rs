@@ -240,7 +240,7 @@ impl<TE: TexEnv> Chainable for ScaleSplit<TE> {
     }
 }
 
-fn default_for<TE: TexEnv>() -> impl GpuCmdByMut {
+pub fn default_for<TE: TexEnv>() -> impl GpuCmdByMut {
     Chain
         * source_both::<TE>(Source::Previous, Source::Previous, Source::Previous)
         * Operand::<TE> {
@@ -261,7 +261,7 @@ fn default_for<TE: TexEnv>() -> impl GpuCmdByMut {
         * scale_both(Scale::X1)
 }
 
-fn all_defaults() -> impl GpuCmdByMut {
+pub fn all_defaults() -> impl GpuCmdByMut {
     super::Root + default_for::<E0>()
         + default_for::<E1>()
         + default_for::<E2>()
