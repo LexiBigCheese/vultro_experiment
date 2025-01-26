@@ -14,7 +14,7 @@ use super::{CONSECUTIVE_WRITING, GpuCmd, GpuCmdByMut, extra_params, mask};
 
 ///Incremental Writes
 pub trait ChainableByMut {
-    const SIZE: u8;
+    fn size(&self) -> u8;
     /// The size passed in here considers your own param_size
     fn start_chain_by_mut<Alloc: Allocator>(self, extra_size: u8, buf: &mut Vec<u32, Alloc>);
 }
@@ -39,7 +39,7 @@ impl<T: Chainable> GpuCmd for T {
 }
 
 impl<T: Chainable> ChainableByMut for T {
-    const SIZE: u8 = 1;
+    fn size(&self) -> u8 {1}
 
     fn start_chain_by_mut<Alloc: Allocator>(self, size: u8, buf: &mut Vec<u32, Alloc>) {
         let reg = self.reg();
@@ -83,8 +83,9 @@ impl<T: ChainableByMut> std::ops::Mul<T> for Chain {
 
 impl<T: ChainableByMut> GpuCmdByMut for ChainOne<T> {
     fn cmd_by_mut<A: Allocator>(self, buf: &mut Vec<u32, A>) {
-        self.0.start_chain_by_mut(T::SIZE - 1, buf);
-        if (T::SIZE & 1) == 0 {
+        let sz = self.0.size();
+        self.0.start_chain_by_mut(sz - 1, buf);
+        if (sz & 1) == 0 {
             buf.push(0);
         }
     }
@@ -97,7 +98,7 @@ impl<M: ChainableByMut, R: ChainableNext<Next = M> + ChainableByMut> std::ops::M
 
     fn mul(self, rhs: M) -> Self::Output {
         ChainMore {
-            size: R::SIZE + M::SIZE - 1,
+            size: self.0.size() + rhs.size() - 1,
             root: self.0,
             more: rhs,
         }
@@ -116,7 +117,7 @@ where
     type Output = ChainMore<R, ChainCons<MA, MB>>;
     fn mul(self, rhs: MB) -> Self::Output {
         ChainMore {
-            size: self.size + MB::SIZE,
+            size: self.size + rhs.size(),
             root: self.root,
             more: ChainCons(self.more, rhs),
         }
