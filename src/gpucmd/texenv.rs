@@ -243,7 +243,7 @@ impl<TE: TexEnv> Chainable for ScaleSplit<TE> {
 pub fn default_for<TE: TexEnv>() -> impl GpuCmdByMut {
     Chain
         * source_both::<TE>(Source::Previous, Source::Previous, Source::Previous)
-        * Operand::<TE> {
+        * Operand {
             rgb: (
                 ColorOp::SourceColor,
                 ColorOp::SourceColor,
@@ -257,7 +257,7 @@ pub fn default_for<TE: TexEnv>() -> impl GpuCmdByMut {
             te: Default::default(),
         }
         * combiner_both(CombineMode::Replace)
-        * Color::<TE>(0x00000000, Default::default())
+        * Color(0x00000000, Default::default())
         * scale_both(Scale::X1)
 }
 
