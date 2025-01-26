@@ -16,7 +16,7 @@ use super::{CONSECUTIVE_WRITING, GpuCmd, GpuCmdByMut, extra_params, mask};
 pub trait ChainableByMut {
     const SIZE: u8;
     /// The size passed in here considers your own param_size
-    fn start_chain_by_mut<Alloc: Allocator>(self, size: u8, buf: &mut Vec<u32, Alloc>);
+    fn start_chain_by_mut<Alloc: Allocator>(self, extra_size: u8, buf: &mut Vec<u32, Alloc>);
 }
 
 pub trait ChainContinueByMut {
@@ -82,7 +82,10 @@ impl<T: ChainableByMut> std::ops::Mul<T> for Chain {
 
 impl<T: ChainableByMut> GpuCmdByMut for ChainOne<T> {
     fn cmd_by_mut<A: Allocator>(self, buf: &mut Vec<u32, A>) {
-        self.0.start_chain_by_mut(0, buf);
+        self.0.start_chain_by_mut(T::SIZE - 1, buf);
+        if (T::SIZE & 1) == 0 {
+            buf.push(0);
+        }
     }
 }
 
@@ -127,5 +130,8 @@ impl<const SIZE: u8, M: ChainContinueByMut, R: ChainableByMut> GpuCmdByMut for C
     fn cmd_by_mut<A: Allocator>(self, buf: &mut Vec<u32, A>) {
         self.root.start_chain_by_mut(SIZE, buf);
         self.more.continue_chain_by_mut(buf);
+        if (SIZE & 1) == 0 {
+            buf.push(0);
+        }
     }
 }
