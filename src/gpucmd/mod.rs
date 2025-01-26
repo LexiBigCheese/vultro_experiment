@@ -7,6 +7,7 @@ pub mod color_operation;
 pub mod texenv;
 pub mod depth_color_mask;
 pub mod transfer;
+pub mod chain;
 
 use std::alloc::Allocator;
 
