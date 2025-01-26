@@ -68,7 +68,8 @@ pub trait ChainableNext {
 pub struct Chain;
 pub struct ChainOne<T>(T);
 pub struct ChainCons<A, B>(A, B);
-pub struct ChainMore<const SIZE: u8, R, M> {
+pub struct ChainMore<R, M> {
+    size: u8,
     root: R,
     more: M,
 }
@@ -91,13 +92,12 @@ impl<T: ChainableByMut> GpuCmdByMut for ChainOne<T> {
 
 impl<M: ChainableByMut, R: ChainableNext<Next = M> + ChainableByMut> std::ops::Mul<M>
     for ChainOne<R>
-where
-    ChainMore<{ M::SIZE + R::SIZE - 1 }, R, M>: Sized,
 {
-    type Output = ChainMore<{ M::SIZE + R::SIZE - 1 }, R, M>;
+    type Output = ChainMore<R, M>;
 
     fn mul(self, rhs: M) -> Self::Output {
         ChainMore {
+            size: R::SIZE + M::SIZE - 1,
             root: self.0,
             more: rhs,
         }
@@ -108,29 +108,33 @@ impl<MA, MB: ChainableNext> ChainableNext for ChainCons<MA, MB> {
     type Next = MB::Next;
 }
 
-impl<
-    const SIZE: u8,
-    MB: ChainableByMut,
-    MA: ChainableNext<Next = MB>,
-    R: ChainableNext<Next = MA> + ChainableByMut,
-> std::ops::Mul<MB> for ChainMore<SIZE, R, MA>
+impl<MB: ChainableByMut, MA: ChainableNext<Next = MB>, R>
+    std::ops::Mul<MB> for ChainMore<R, MA>
 where
-    ChainMore<{ SIZE + MB::SIZE }, R, ChainCons<MA, MB>>: Sized,
+    ChainMore<R, ChainCons<MA, MB>>: Sized,
 {
-    type Output = ChainMore<{ SIZE + MB::SIZE }, R, ChainCons<MA, MB>>;
+    type Output = ChainMore<R, ChainCons<MA, MB>>;
     fn mul(self, rhs: MB) -> Self::Output {
         ChainMore {
+            size: self.size + MB::SIZE,
             root: self.root,
             more: ChainCons(self.more, rhs),
         }
     }
 }
 
-impl<const SIZE: u8, M: ChainContinueByMut, R: ChainableByMut> GpuCmdByMut for ChainMore<SIZE, R, M> {
+impl<MA: ChainContinueByMut, MB: ChainContinueByMut> ChainContinueByMut for ChainCons<MA, MB> {
+    fn continue_chain_by_mut<Alloc: Allocator>(self, buf: &mut Vec<u32, Alloc>) {
+        self.0.continue_chain_by_mut(buf);
+        self.1.continue_chain_by_mut(buf);
+    }
+}
+
+impl<M: ChainContinueByMut, R: ChainableByMut> GpuCmdByMut for ChainMore<R, M> {
     fn cmd_by_mut<A: Allocator>(self, buf: &mut Vec<u32, A>) {
-        self.root.start_chain_by_mut(SIZE, buf);
+        self.root.start_chain_by_mut(self.size, buf);
         self.more.continue_chain_by_mut(buf);
-        if (SIZE & 1) == 0 {
+        if (self.size & 1) == 0 {
             buf.push(0);
         }
     }

@@ -1,54 +1,38 @@
 use ctru_sys::*;
 use std::alloc::Allocator;
 
-use super::{mask, GpuCmdByMut};
+use super::{
+    GpuCmdByMut,
+    chain::{Chain, Chainable, ChainableNext},
+    mask,
+};
 
-#[derive(Clone, Copy, PartialEq, Eq, Debug)]
-#[repr(u32)]
-pub enum TexEnv {
-    E0,
-    E1,
-    E2,
-    E3,
-    E4,
-    E5,
-}
-
-impl TexEnv {
-    pub const ALL: [TexEnv; 6] = [
-        TexEnv::E0,
-        TexEnv::E1,
-        TexEnv::E2,
-        TexEnv::E3,
-        TexEnv::E4,
-        TexEnv::E5,
-    ];
+pub trait TexEnv: Sized + Default {
+    const BASE: u32;
     fn base(self) -> u32 {
-        match self {
-            TexEnv::E0 => GPUREG_TEXENV0_SOURCE,
-            TexEnv::E1 => GPUREG_TEXENV1_SOURCE,
-            TexEnv::E2 => GPUREG_TEXENV2_SOURCE,
-            TexEnv::E3 => GPUREG_TEXENV3_SOURCE,
-            TexEnv::E4 => GPUREG_TEXENV4_SOURCE,
-            TexEnv::E5 => GPUREG_TEXENV5_SOURCE,
+        Self::BASE
+    }
+}
+
+macro_rules! texenv_n {
+    ($name:ident,$base:expr) => {
+        #[derive(Clone, Copy, PartialEq, Eq, Debug, Default)]
+        pub struct $name;
+
+        impl TexEnv for $name {
+            const BASE: u32 = $base;
         }
-    }
+    };
 }
 
-pub trait TexEnvCmdByMut {
-    fn te_cmd_by_mut<Alloc: Allocator>(self, texenv: TexEnv, buf: &mut Vec<u32, Alloc>);
-}
+texenv_n!(E0, ctru_sys::GPUREG_TEXENV0_SOURCE);
+texenv_n!(E1, ctru_sys::GPUREG_TEXENV1_SOURCE);
+texenv_n!(E2, ctru_sys::GPUREG_TEXENV2_SOURCE);
+texenv_n!(E3, ctru_sys::GPUREG_TEXENV3_SOURCE);
+texenv_n!(E4, ctru_sys::GPUREG_TEXENV4_SOURCE);
+texenv_n!(E5, ctru_sys::GPUREG_TEXENV5_SOURCE);
 
-pub trait TexEnvCmd {
-    fn te_cmd(self) -> (u32, u32);
-}
-
-impl<A: TexEnvCmd> TexEnvCmdByMut for A {
-    fn te_cmd_by_mut<Alloc: Allocator>(self, texenv: TexEnv, buf: &mut Vec<u32, Alloc>) {
-        let (cmd_offset, cmd_param) = self.te_cmd();
-        buf.extend_from_slice(&[cmd_param, (texenv.base() + cmd_offset) | mask(0xF)]);
-    }
-}
+// E0 * Source = impl Chainable + ChainableNext<Next = TEC<E0,Operand>>
 
 ///https://www.3dbrew.org/wiki/GPU/Internal_Registers#GPUREG_TEXENVi_SOURCE
 #[derive(Clone, Copy, PartialEq, Eq, Debug)]
@@ -69,34 +53,39 @@ pub enum Source {
     Previous = 15,
 }
 
-#[derive(Clone, Copy)]
-pub struct SourceBoth(pub Source, pub Source, pub Source);
-
-impl TexEnvCmd for SourceBoth {
-    fn te_cmd(self) -> (u32, u32) {
-        let n = (self.0 as u32) | ((self.1 as u32) << 4) | ((self.2 as u32) << 8);
-        (0, n | (n << 16))
+///Successor: Operand
+pub fn source_both<TE: TexEnv>(a: Source, b: Source, c: Source) -> SourceSplit<TE> {
+    SourceSplit {
+        rgb: (a, b, c),
+        alpha: (a, b, c),
+        te: Default::default(),
     }
 }
 
+//Successor: Operand
 #[derive(Clone, Copy)]
-pub struct SourceSplit {
+pub struct SourceSplit<TE: TexEnv> {
     pub rgb: (Source, Source, Source),
     pub alpha: (Source, Source, Source),
+    pub te: TE,
 }
 
-impl TexEnvCmd for SourceSplit {
-    fn te_cmd(self) -> (u32, u32) {
-        (
-            0,
-            (self.rgb.0 as u32)
-                | ((self.rgb.1 as u32) << 4)
-                | ((self.rgb.2 as u32) << 8)
-                | ((self.alpha.0 as u32) << 16)
-                | ((self.alpha.1 as u32) << 20)
-                | ((self.alpha.2 as u32) << 24),
-        )
+impl<TE: TexEnv> Chainable for SourceSplit<TE> {
+    fn reg(&self) -> u32 {
+        TE::BASE + 0
     }
+    fn param(self) -> u32 {
+        (self.rgb.0 as u32)
+            | ((self.rgb.1 as u32) << 4)
+            | ((self.rgb.2 as u32) << 8)
+            | ((self.alpha.0 as u32) << 16)
+            | ((self.alpha.1 as u32) << 20)
+            | ((self.alpha.2 as u32) << 24)
+    }
+}
+
+impl<TE: TexEnv> ChainableNext for SourceSplit<TE> {
+    type Next = Operand<TE>;
 }
 
 ///https://www.3dbrew.org/wiki/GPU/Internal_Registers#GPUREG_TEXENVi_OPERAND
@@ -129,24 +118,30 @@ pub enum AlphaOp {
     OneMinusSourceBlue = 7,
 }
 
+///Successor = `CombinerSplit` or `combiner_both`
 #[derive(Clone, Copy)]
-pub struct Operand {
+pub struct Operand<TE: TexEnv> {
     pub rgb: (ColorOp, ColorOp, ColorOp),
     pub alpha: (AlphaOp, AlphaOp, AlphaOp),
+    pub te: TE,
 }
 
-impl TexEnvCmd for Operand {
-    fn te_cmd(self) -> (u32, u32) {
-        (
-            1,
-            (self.rgb.0 as u32)
-                | ((self.rgb.1 as u32) << 4)
-                | ((self.rgb.2 as u32) << 8)
-                | ((self.alpha.0 as u32) << 12)
-                | ((self.alpha.1 as u32) << 16)
-                | ((self.alpha.2 as u32) << 20),
-        )
+impl<TE: TexEnv> Chainable for Operand<TE> {
+    fn reg(&self) -> u32 {
+        TE::BASE + 1
     }
+    fn param(self) -> u32 {
+        (self.rgb.0 as u32)
+            | ((self.rgb.1 as u32) << 4)
+            | ((self.rgb.2 as u32) << 8)
+            | ((self.alpha.0 as u32) << 12)
+            | ((self.alpha.1 as u32) << 16)
+            | ((self.alpha.2 as u32) << 20)
+    }
+}
+
+impl<TE: TexEnv> ChainableNext for Operand<TE> {
+    type Next = CombinerSplit<TE>;
 }
 
 ///https://www.3dbrew.org/wiki/GPU/Internal_Registers#GPUREG_TEXENVi_COMBINER
@@ -165,35 +160,52 @@ pub enum CombineMode {
     AddThenMultiply,
 }
 
+///Successor = `Color`
 #[derive(Clone, Copy)]
-pub struct CombinerSplit {
+pub struct CombinerSplit<TE: TexEnv> {
     pub rgb: CombineMode,
     pub alpha: CombineMode,
+    pub te: TE,
 }
 
-impl TexEnvCmd for CombinerSplit {
-    fn te_cmd(self) -> (u32, u32) {
-        (2, (self.rgb as u32) | ((self.alpha as u32) << 16))
+impl<TE: TexEnv> Chainable for CombinerSplit<TE> {
+    fn reg(&self) -> u32 {
+        TE::BASE + 2
+    }
+    fn param(self) -> u32 {
+        (self.rgb as u32) | ((self.alpha as u32) << 16)
     }
 }
 
-#[derive(Clone, Copy)]
-pub struct CombinerBoth(pub CombineMode);
+impl<TE: TexEnv> ChainableNext for CombinerSplit<TE> {
+    type Next = Color<TE>;
+}
 
-impl TexEnvCmd for CombinerBoth {
-    fn te_cmd(self) -> (u32, u32) {
-        (2, (self.0 as u32) | ((self.0 as u32) << 16))
+///Successor = `Color`
+pub fn combiner_both<TE: TexEnv>(m: CombineMode) -> CombinerSplit<TE> {
+    CombinerSplit {
+        rgb: m,
+        alpha: m,
+        te: Default::default(),
     }
 }
 
 ///Note: `u32::from_le_bytes([r,g,b,a])`
+///Successor = `scale_both` or `ScaleSplit`
 #[derive(Clone, Copy, PartialEq, Eq, Debug)]
-pub struct Color(pub u32);
+pub struct Color<TE: TexEnv>(pub u32, pub TE);
 
-impl TexEnvCmd for Color {
-    fn te_cmd(self) -> (u32, u32) {
-        (3, self.0)
+impl<TE: TexEnv> Chainable for Color<TE> {
+    fn reg(&self) -> u32 {
+        TE::BASE + 3
     }
+    fn param(self) -> u32 {
+        self.0
+    }
+}
+
+impl<TE: TexEnv> ChainableNext for Color<TE> {
+    type Next = ScaleSplit<TE>;
 }
 
 #[derive(Clone, Copy, PartialEq, Eq, Debug)]
@@ -204,94 +216,56 @@ pub enum Scale {
     X4,
 }
 
-#[derive(Clone, Copy)]
-pub struct ScaleBoth(pub Scale);
-
-impl TexEnvCmd for ScaleBoth {
-    fn te_cmd(self) -> (u32, u32) {
-        (4, (self.0 as u32) | ((self.0 as u32) << 16))
+pub fn scale_both<TE: TexEnv>(s: Scale) -> ScaleSplit<TE> {
+    ScaleSplit {
+        rgb: s,
+        alpha: s,
+        te: Default::default(),
     }
 }
 
 #[derive(Clone, Copy)]
-pub struct ScaleSplit {
+pub struct ScaleSplit<TE: TexEnv> {
     pub rgb: Scale,
     pub alpha: Scale,
+    pub te: TE,
 }
 
-impl TexEnvCmd for ScaleSplit {
-    fn te_cmd(self) -> (u32, u32) {
-        (4, (self.rgb as u32) | ((self.alpha as u32) << 16))
+impl<TE: TexEnv> Chainable for ScaleSplit<TE> {
+    fn reg(&self) -> u32 {
+        TE::BASE + 4
+    }
+    fn param(self) -> u32 {
+        (self.rgb as u32) | ((self.alpha as u32) << 16)
     }
 }
 
-#[derive(Clone, Copy)]
-pub struct TexEnvCons<A, B>(A, B);
-
-impl<A: TexEnvCmdByMut, B: TexEnvCmdByMut> TexEnvCmdByMut for TexEnvCons<A, B> {
-    fn te_cmd_by_mut<Alloc: Allocator>(self, texenv: TexEnv, buf: &mut Vec<u32, Alloc>) {
-        self.0.te_cmd_by_mut(texenv, buf);
-        self.1.te_cmd_by_mut(texenv, buf);
-    }
-}
-
-impl<A: TexEnvCmdByMut, B: TexEnvCmdByMut, C: TexEnvCmdByMut> std::ops::Mul<C>
-    for TexEnvCons<A, B>
-{
-    type Output = TexEnvCons<TexEnvCons<A, B>, C>;
-
-    fn mul(self, rhs: C) -> Self::Output {
-        TexEnvCons(self, rhs)
-    }
-}
-
-#[derive(Clone, Copy)]
-pub struct TexEnvRoot<A>(TexEnv, A);
-
-impl<A: TexEnvCmdByMut> GpuCmdByMut for TexEnvRoot<A> {
-    fn cmd_by_mut<Alloc: Allocator>(self, buf: &mut Vec<u32, Alloc>) {
-        self.1.te_cmd_by_mut(self.0, buf);
-    }
-}
-
-impl<A: TexEnvCmdByMut> std::ops::Mul<A> for TexEnv {
-    type Output = TexEnvRoot<A>;
-
-    fn mul(self, rhs: A) -> Self::Output {
-        TexEnvRoot(self, rhs)
-    }
-}
-
-impl<A: TexEnvCmdByMut, B: TexEnvCmdByMut> std::ops::Mul<B> for TexEnvRoot<A> {
-    type Output = TexEnvRoot<TexEnvCons<A, B>>;
-    fn mul(self, rhs: B) -> Self::Output {
-        TexEnvRoot(self.0, TexEnvCons(self.1, rhs))
-    }
-}
-
-#[derive(Clone, Copy)]
-pub struct Defaults;
-
-impl GpuCmdByMut for Defaults {
-    fn cmd_by_mut<A: Allocator>(self, buf: &mut Vec<u32, A>) {
-        for te in TexEnv::ALL {
-            (te * SourceBoth(Source::Constant, Source::Constant, Source::Constant)
-                * Operand {
-                    rgb: (
-                        ColorOp::SourceColor,
-                        ColorOp::SourceColor,
-                        ColorOp::SourceColor,
-                    ),
-                    alpha: (
-                        AlphaOp::SourceAlpha,
-                        AlphaOp::SourceAlpha,
-                        AlphaOp::SourceAlpha,
-                    ),
-                }
-                * CombinerBoth(CombineMode::Replace)
-                * Color(0)
-                * ScaleBoth(Scale::X1))
-            .cmd_by_mut(buf);
+fn default_for<TE: TexEnv>() -> impl GpuCmdByMut {
+    Chain
+        * source_both::<TE>(Source::Previous, Source::Previous, Source::Previous)
+        * Operand::<TE> {
+            rgb: (
+                ColorOp::SourceColor,
+                ColorOp::SourceColor,
+                ColorOp::SourceColor,
+            ),
+            alpha: (
+                AlphaOp::SourceAlpha,
+                AlphaOp::SourceAlpha,
+                AlphaOp::SourceAlpha,
+            ),
+            te: Default::default(),
         }
-    }
+        * combiner_both(CombineMode::Replace)
+        * Color::<TE>(0x00000000, Default::default())
+        * scale_both(Scale::X1)
+}
+
+fn all_defaults() -> impl GpuCmdByMut {
+    super::Root + default_for::<E0>()
+        + default_for::<E1>()
+        + default_for::<E2>()
+        + default_for::<E3>()
+        + default_for::<E4>()
+        + default_for::<E5>()
 }
