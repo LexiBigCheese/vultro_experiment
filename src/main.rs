@@ -1,5 +1,6 @@
 #![feature(allocator_api)]
 #![feature(generic_const_exprs)]
+#![feature(slice_split_once)]
 
 pub mod buffer;
 pub mod gpucmd;

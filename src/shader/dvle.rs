@@ -4,15 +4,16 @@ use super::{Error::UnexpectedEof as EOF, GshMode, Kind};
 
 pub struct DVLE {
     ///If this is set, this is a Geometry Shader
-    pub geom: Option<DVLEGeom>,
+    pub(crate) geom: Option<DVLEGeom>,
+    pub(crate) symbol_to_uniform: std::collections::HashMap<String, UniformEntry>
 }
 
 #[derive(Clone, Copy)]
-pub struct DVLEGeom {
-    pub mode: GshMode,
-    pub fixed_vertex_start: u8,
-    pub variable_vertex_num: u8,
-    pub fixed_vertex_num: u8,
+pub(crate) struct DVLEGeom {
+    pub(crate) mode: GshMode,
+    pub(crate) fixed_vertex_start: u8,
+    pub(crate) variable_vertex_num: u8,
+    pub(crate) fixed_vertex_num: u8,
 }
 
 #[derive(Pod, Zeroable, Clone, Copy)]
@@ -45,10 +46,10 @@ struct UniformEntryRaw {
     end_reg: u16,
 }
 
-#[derive(Clone,Copy)]
+#[derive(Clone, Copy)]
 pub struct UniformEntry {
     start_reg: u16,
-    end_reg: u16
+    end_reg: u16,
 }
 
 impl DVLE {
@@ -92,17 +93,28 @@ impl DVLE {
         let uniform_table_start_in_bytes = gd(12)? as usize;
         let uniform_table_start = uniform_table_start_in_bytes / 4;
         let uniform_table_size = gd(13)? as usize;
-        let uniform_table: &[UniformEntryRaw] = bytemuck::try_cast_slice(sac(uniform_table_start)?.1)?
-            .split_at_checked(uniform_table_size)
-            .ok_or(EOF)?
-            .0;
-        ///Now we build a PROPER symbol table by SAFELY CHECKING the symbol table that we have.
+        let uniform_table: &[UniformEntryRaw] =
+            bytemuck::try_cast_slice(sac(uniform_table_start)?.1)?
+                .split_at_checked(uniform_table_size)
+                .ok_or(EOF)?
+                .0;
+        //Now we build a PROPER symbol table by SAFELY CHECKING the symbol table that we have.
         let symbol_table_start_in_bytes = gd(14)? as usize;
         let symbol_table_start = symbol_table_start_in_bytes / 4;
         let symbol_table_raw: &[u8] = bytemuck::try_cast_slice(sac(symbol_table_start)?.1)?;
-        let mut symbol_to_uniform: std::collections::HashMap<String,UniformEntry> = std::collections::HashMap::new();
+        let mut symbol_to_uniform: std::collections::HashMap<String, UniformEntry> =
+            std::collections::HashMap::new();
         for u in uniform_table {
-            let sym = symbol_table_raw.split_at_checked(u.symbol_offset as usize).ok_or(EOF)?.1;
+            let sym = symbol_table_raw
+                .split_at_checked(u.symbol_offset as usize)
+                .ok_or(EOF)?
+                .1;
+            let sym = sym.split_once(|x| *x == 0).ok_or(EOF)?.0;
+            let sym = std::str::from_utf8(sym)?;
+            symbol_to_uniform.insert(sym.to_string(),UniformEntry {
+                start_reg: u.start_reg,
+                end_reg: u.end_reg
+            });
         }
         todo!()
     }
