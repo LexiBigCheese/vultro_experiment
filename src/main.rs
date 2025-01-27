@@ -8,6 +8,7 @@ pub mod queue;
 pub mod texture;
 pub mod vram;
 pub mod shader_unfun;
+pub mod shader;
 
 use ctru::prelude::*;
 
