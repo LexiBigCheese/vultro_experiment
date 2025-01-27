@@ -35,7 +35,7 @@ fn main() {
                 alpha::SrcAlpha,
                 alpha::OneMinusSrcAlpha,
             )
-            + shader_outmap::reset()
+
     };
     println!("Hello, world!");
 }

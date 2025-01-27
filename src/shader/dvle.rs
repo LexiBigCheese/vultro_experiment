@@ -5,7 +5,7 @@ use super::{Error::UnexpectedEof as EOF, GshMode, Kind};
 pub struct DVLE {
     ///If this is set, this is a Geometry Shader
     pub(crate) geom: Option<DVLEGeom>,
-    pub(crate) symbol_to_uniform: std::collections::HashMap<String, UniformEntry>
+    pub(crate) symbol_to_uniform: std::collections::HashMap<String, UniformEntry>,
 }
 
 #[derive(Clone, Copy)]
@@ -111,11 +111,107 @@ impl DVLE {
                 .1;
             let sym = sym.split_once(|x| *x == 0).ok_or(EOF)?.0;
             let sym = std::str::from_utf8(sym)?;
-            symbol_to_uniform.insert(sym.to_string(),UniformEntry {
+            symbol_to_uniform.insert(sym.to_string(), UniformEntry {
                 start_reg: u.start_reg,
-                end_reg: u.end_reg
+                end_reg: u.end_reg,
             });
         }
+        //Now we construct the OutMap
+        //[0] is total, [1] is GPUREG_SH_OUTMAP_TOTAL | CONSECUTIVE_WRITES | extra_params(7)
+        let mut outmap = [0x1F1F1F1Fu32; 10];
+        let mut outmap_total = 0u32;
+        outmap[1] = ctru_sys::GPUREG_SH_OUTMAP_TOTAL
+            | crate::gpucmd::CONSECUTIVE_WRITING
+            | crate::gpucmd::extra_params(7);
+        let mut outmap_mask = 0u32;
+        let mut outmap_mode = 0u32;
+        let mut outmap_clock = 0u32;
+        for entry in out_table {
+            let OutEntryRaw {
+                kind,
+                reg_id,
+                out_mask,
+            } = entry;
+            let reg_id = *reg_id as u32;
+            let out = &mut outmap[(reg_id as usize) + 2];
+            if outmap_mask & (1 << reg_id) == 0 {
+                outmap_mask |= 1 << reg_id;
+                outmap_total += 1;
+            }
+            let mut sem = 0x1F;
+            let mut num = 0;
+            use ctru_sys::*;
+            match *kind as u8 {
+                // case RESULT_POSITION:   sem = 0x00; num = 4;                                                     break;
+                RESULT_POSITION => {
+                    sem = 0x00;
+                    num = 4;
+                }
+                // case RESULT_NORMALQUAT: sem = 0x04; num = 4; dvle->outmapClock |= BIT(24);                       break;
+                RESULT_NORMALQUAT => {
+                    sem = 0x04;
+                    num = 4;
+                    outmap_clock |= 1 << 24;
+                }
+                // case RESULT_COLOR:      sem = 0x08; num = 4; dvle->outmapClock |= BIT(1);                        break;
+                RESULT_COLOR => {
+                    sem = 0x08;
+                    num = 4;
+                    outmap_clock |= 1 << 1;
+                }
+                // case RESULT_TEXCOORD0:  sem = 0x0C; num = 2; dvle->outmapClock |= BIT(8);  dvle->outmapMode = 1; break;
+                RESULT_TEXCOORD0 => {
+                    sem = 0x0C;
+                    num = 2;
+                    outmap_clock |= 1 << 8;
+                    outmap_mode = 1
+                }
+                // case RESULT_TEXCOORD0W: sem = 0x10; num = 1; dvle->outmapClock |= BIT(16); dvle->outmapMode = 1; break;
+                RESULT_TEXCOORD0W => {
+                    sem = 0x10;
+                    num = 1;
+                    outmap_clock |= 1 << 16;
+                    outmap_mode = 1
+                }
+                // case RESULT_TEXCOORD1:  sem = 0x0E; num = 2; dvle->outmapClock |= BIT(9);  dvle->outmapMode = 1; break;
+                RESULT_TEXCOORD1 => {
+                    sem = 0x0E;
+                    num = 2;
+                    outmap_clock |= 1 << 9;
+                    outmap_mode = 1
+                }
+                // case RESULT_TEXCOORD2:  sem = 0x16; num = 2; dvle->outmapClock |= BIT(10); dvle->outmapMode = 1; break;
+                RESULT_TEXCOORD2 => {
+                    sem = 0x16;
+                    num = 2;
+                    outmap_clock |= 1 << 10;
+                    outmap_mode = 1
+                }
+                // case RESULT_VIEW:       sem = 0x12; num = 3; dvle->outmapClock |= BIT(24);                       break;
+                RESULT_VIEW => {
+                    sem = 0x12;
+                    num = 3;
+                    outmap_clock |= 1 << 24;
+                }
+                // default: continue;
+                _ => (),
+            }
+            let mut j = 0;
+            let mut k = 0;
+            while j < 4 && k < num {
+                if (outmap_mask & (1 << j)) != 0 {
+                    *out &= (0xFF << (j * 8)) ^ 0xFFFFFFFF;
+                    *out |= sem << (j * 8);
+
+                    k += 1;
+                    if *kind == (RESULT_POSITION as u16) && k == 3 {
+                        outmap_clock |= 1;
+                    }
+                }
+                j += 1;
+            }
+        }
+        outmap[0] = outmap_total;
         todo!()
     }
 }

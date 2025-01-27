@@ -30,45 +30,16 @@ pub enum Component {
 
 pub use Component::*;
 
-use super::{mask, GpuCmd, GpuCmdByMut, Root};
+use super::GpuCmdByMut;
 
-///https://www.3dbrew.org/wiki/GPU/Internal_Registers#GPUREG_SH_OUTMAP_Oi
+//The chain is OUTMAP_TOTAL -> OUTMAP_O{0..=6}
+
+///This is the full command buffer required to set the outmap
 #[derive(Clone, Copy)]
-pub(crate) struct OutMap(u32, Component, Component, Component, Component);
-///https://www.3dbrew.org/wiki/GPU/Internal_Registers#GPUREG_SH_OUTMAP_TOTAL
-#[derive(Clone, Copy)]
-pub(crate) struct OutMapTotal(u32);
+pub struct OutMap([u32;10]);
 
-pub(crate) fn unused(reg: u32) -> OutMap {
-    OutMap(reg, Unused, Unused, Unused, Unused)
-}
-pub(crate) fn reset() -> impl GpuCmdByMut + Clone + Copy {
-    Root + unused(0)
-        + unused(1)
-        + unused(2)
-        + unused(3)
-        + unused(4)
-        + unused(5)
-        + unused(6)
-        + OutMapTotal(0)
-}
-
-//TODO: Utilise Consecutive Writing Mode
-
-impl GpuCmd for OutMapTotal {
-    type Out = [u32; 2];
-
-    fn cmd(self) -> Self::Out {
-        [self.0, GPUREG_SH_OUTMAP_TOTAL | mask(0xF)]
-    }
-}
-
-impl GpuCmd for OutMap {
-    type Out = [u32; 2];
-    fn cmd(self) -> Self::Out {
-        [
-            u32::from_le_bytes([self.1 as u8, self.2 as u8, self.3 as u8, self.4 as u8]),
-            (GPUREG_SH_OUTMAP_O0 + self.0) | mask(0xF),
-        ]
+impl GpuCmdByMut for OutMap {
+    fn cmd_by_mut<A:std::alloc::Allocator>(self, buf: &mut Vec<u32,A>) {
+        buf.extend_from_slice(&self.0);
     }
 }
