@@ -8,7 +8,8 @@ pub mod dvle;
 pub enum Error {
     BytemuckPodcast(bytemuck::PodCastError),
     UnexpectedEof,
-    BadGshMode
+    BadGshMode,
+    Utf8Error(std::str::Utf8Error)
 }
 
 #[derive(Clone, Copy, Debug)]

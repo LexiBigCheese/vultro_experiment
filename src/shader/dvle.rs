@@ -45,6 +45,12 @@ struct UniformEntryRaw {
     end_reg: u16,
 }
 
+#[derive(Clone,Copy)]
+pub struct UniformEntry {
+    start_reg: u16,
+    end_reg: u16
+}
+
 impl DVLE {
     pub fn parse_dvle(data: &[u32]) -> Result<DVLE, super::Error> {
         let gd = |offset: usize| data.get(offset).map(|x| *x).ok_or(EOF);
@@ -90,6 +96,14 @@ impl DVLE {
             .split_at_checked(uniform_table_size)
             .ok_or(EOF)?
             .0;
+        ///Now we build a PROPER symbol table by SAFELY CHECKING the symbol table that we have.
+        let symbol_table_start_in_bytes = gd(14)? as usize;
+        let symbol_table_start = symbol_table_start_in_bytes / 4;
+        let symbol_table_raw: &[u8] = bytemuck::try_cast_slice(sac(symbol_table_start)?.1)?;
+        let mut symbol_to_uniform: std::collections::HashMap<String,UniformEntry> = std::collections::HashMap::new();
+        for u in uniform_table {
+            let sym = symbol_table_raw.split_at_checked(u.symbol_offset as usize).ok_or(EOF)?.1;
+        }
         todo!()
     }
 }
