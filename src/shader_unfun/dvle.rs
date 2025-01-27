@@ -1,11 +1,17 @@
 use bytemuck::{Pod, Zeroable};
 
+use crate::gpucmd::shader_outmap::OutMap;
+
 use super::{Error::UnexpectedEof as EOF, GshMode, Kind};
 
 pub struct DVLE {
     ///If this is set, this is a Geometry Shader
     pub(crate) geom: Option<DVLEGeom>,
     pub(crate) symbol_to_uniform: std::collections::HashMap<String, UniformEntry>,
+    pub(crate) outmap: OutMap,
+    pub(crate) outmap_mask: u32,
+    pub(crate) outmap_mode: u32,
+    pub(crate) outmap_clock: u32
 }
 
 #[derive(Clone, Copy)]
@@ -118,12 +124,16 @@ impl DVLE {
         }
         //Now we construct the OutMap
         //[0] is total, [1] is GPUREG_SH_OUTMAP_TOTAL | CONSECUTIVE_WRITES | extra_params(7)
+        //Don't forget to merge them if requested
         let mut outmap = [0x1F1F1F1Fu32; 10];
         let mut outmap_total = 0u32;
         outmap[1] = ctru_sys::GPUREG_SH_OUTMAP_TOTAL
             | crate::gpucmd::CONSECUTIVE_WRITING
             | crate::gpucmd::extra_params(7);
+        //https://github.com/devkitPro/libctru/blob/master/libctru/source/gpu/shaderProgram.c
+        //Line 254 for VSH, line 267 for GSH
         let mut outmap_mask = 0u32;
+        //Merge VSH and GSH mode and clock if requested. AAAAA
         let mut outmap_mode = 0u32;
         let mut outmap_clock = 0u32;
         for entry in out_table {
