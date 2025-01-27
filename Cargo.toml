@@ -8,6 +8,7 @@ ctru-rs = { git = "https://github.com/rust3ds/ctru-rs" }
 ctru-sys = { git = "https://github.com/rust3ds/ctru-rs" }
 bytemuck = { version = "1.21.0", features = ["derive"] }
 swizzle_3ds = "0.2.0"
+derive_more = { version = "1.0.0", features = ["from"] }
 
 [profile.dev]
 opt-level = 3

@@ -6,6 +6,7 @@ pub mod gpucmd;
 pub mod queue;
 pub mod texture;
 pub mod vram;
+pub mod shader;
 
 use ctru::prelude::*;
 
