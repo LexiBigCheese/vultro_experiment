@@ -10,6 +10,7 @@ bytemuck = { version = "1.21.0", features = ["derive"] }
 swizzle_3ds = "0.2.0"
 derive_more = { version = "1.0.0", features = ["from"] }
 tuple_swizzle = "1.0.1"
+nohash = "0.2.0"
 
 [profile.dev]
 opt-level = 3

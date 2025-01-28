@@ -89,6 +89,43 @@ impl Builder {
             current
         }
     }
+    pub fn new() -> Self {
+        todo!()
+    }
+}
+
+#[derive(Clone, Copy)]
+pub struct VSH;
+#[derive(Clone, Copy)]
+pub struct GSH;
+
+impl crate::gpucmd::GpuCmdByMut for (Builder,VSH) {
+    fn cmd_by_mut<A:std::alloc::Allocator>(self, buf: &mut Vec<u32,A>) {
+        use crate::gpucmd::transfer::Transfer;
+        use crate::gpucmd::mask;
+        use ctru_sys::{GPUREG_VSH_CODETRANSFER_CONFIG,GPUREG_VSH_CODETRANSFER_DATA,GPUREG_VSH_CODETRANSFER_END,GPUREG_VSH_OPDESCS_CONFIG,GPUREG_VSH_OPDESCS_DATA};
+        let this = self.0;
+        buf.extend_from_slice(&[
+            0,
+            GPUREG_VSH_CODETRANSFER_CONFIG | mask(0xF)
+        ]);
+        Transfer {
+            reg: GPUREG_VSH_CODETRANSFER_DATA | mask(0xF),
+            data: this.prog
+        }.cmd_by_mut(buf);
+        buf.extend_from_slice(&[
+            1,
+            GPUREG_VSH_CODETRANSFER_END | mask(0xF)
+        ]);
+        buf.extend_from_slice(&[
+            0,
+            GPUREG_VSH_OPDESCS_CONFIG | mask(0xF)
+        ]);
+        Transfer {
+            reg: GPUREG_VSH_OPDESCS_DATA | mask(0xF),
+            data: bytemuck::cast_slice(&this.opdesc)
+        }.cmd_by_mut(buf);
+    }
 }
 
 pub trait AddToBuilder {
@@ -215,9 +252,21 @@ impl Into<SrcRegShort> for (InReg,bool,Swizzle) {
     }
 }
 
+impl Into<SrcRegShort> for InReg {
+    fn into(self) -> SrcRegShort {
+        (self,false,S).into()
+    }
+}
+
 impl Into<SrcRegShort> for (GeneralReg,bool,Swizzle) {
     fn into(self) -> SrcRegShort {
         SrcRegShort { reg: self.0.reg+0x10, neg: self.1, swizzle: self.2 }
+    }
+}
+
+impl Into<SrcRegShort> for GeneralReg {
+    fn into(self) -> SrcRegShort {
+        (self,false,S).into()
     }
 }
 
@@ -227,15 +276,58 @@ impl Into<SrcRegLong> for (InReg,bool,Swizzle) {
     }
 }
 
+impl Into<SrcRegLong> for InReg {
+    fn into(self) -> SrcRegLong {
+        (self,false,S).into()
+    }
+}
+
 impl Into<SrcRegLong> for (GeneralReg,bool,Swizzle) {
     fn into(self) -> SrcRegLong {
         SrcRegLong { reg: self.0.reg+0x10, neg: self.1, swizzle: self.2 }
     }
 }
 
+impl Into<SrcRegLong> for GeneralReg {
+    fn into(self) -> SrcRegLong {
+        (self,false,S).into()
+    }
+}
+
 impl Into<SrcRegLong> for (UniformReg,bool,Swizzle) {
     fn into(self) -> SrcRegLong {
         SrcRegLong { reg: self.0.reg+0x20, neg: self.1, swizzle: self.2 }
+    }
+}
+
+impl Into<SrcRegLong> for UniformReg {
+    fn into(self) -> SrcRegLong {
+        (self,false,S).into()
+    }
+}
+
+#[derive(Default)]
+pub struct UniformAllocator {
+    pub consts: nohash::IntMap<u32,[f32;4]>,
+    pub n_allocated: u32
+}
+
+impl UniformAllocator {
+    ///Note: data is WZYX order, and currently only f32 transfer mode is supported at this time
+    ///Also, only single constants are supported at this time
+    pub fn add_const(&mut self,data: [f32;4]) -> Result<UniformReg,Error> {
+        let next = self.n_allocated;
+        let the_reg = c(next)?;
+        self.consts.insert(next,data);
+        self.n_allocated += 1;
+        Ok(the_reg)
+    }
+    ///Note: only single uniforms are supported at this time
+    pub fn add_uniform(&mut self) -> Result<UniformReg,Error> {
+        let next = self.n_allocated;
+        let the_reg = c(next)?;
+        self.n_allocated += 1;
+        Ok(the_reg)
     }
 }
 
@@ -290,4 +382,23 @@ pub fn mov(dst: impl Into<DstReg>, src: impl Into<SrcRegLong>) -> Format1u {
         dst.into(),
         src.into()
     )
+}
+
+pub struct Format0 {
+    pub(crate) opcode: u32
+}
+
+impl AddToBuilder for Format0 {
+    fn add_to_builder(self,mut b: Builder) -> Builder {
+        b.prog.push(
+            self.opcode << 0x1A
+        );
+        b
+    }
+}
+
+pub fn end() -> Format0 {
+    Format0 {
+        opcode: 0x22
+    }
 }

@@ -35,6 +35,17 @@ impl Queue {
             self.submit_command(gx_dma(src.start_addr(),dst.start_addr(),size,flush))
         }
     }
+    pub fn submit(&self, buf: &crate::gpucmd::CommandBuffer<crate::gpucmd::CmdBufAllocator>) -> Result<(),Error> {
+        unsafe {
+            let slice = buf.buf.as_slice();
+            self.submit_command(gx_command_list(
+                slice.as_ptr().cast(),
+                slice.len() * 4,
+                false,
+                true
+            ))
+        }
+    }
 }
 
 //TODO: Some sort of Buffer wrapper type, then also Buffer::slice and Texture::slice, ways to easily swap between the two, and ways to "map" LINEAR allocated stuff

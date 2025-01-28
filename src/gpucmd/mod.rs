@@ -8,16 +8,61 @@ pub mod texenv;
 pub mod depth_color_mask;
 pub mod transfer;
 pub mod chain;
+pub mod geostage_config;
+pub mod primitive;
+pub mod fixed_attrib;
+pub mod misc;
 
 use std::alloc::Allocator;
 
-///Note: The Buffer **MUST** be `0x10` aligned!
+use ctru::linear::LinearAllocator;
+
+///Note: The Buffer **MUST** be `0x10` bytes aligned!
+///Note: The Buffer's SIZE **MUST ALSO** be `0x10` bytes aligned!
+#[derive(Clone)]
 pub struct CommandBuffer<A> where A:Allocator {
     pub buf: Vec<u32,A>
 }
 
+#[derive(Clone)]
 pub struct CommandEncoder<A> where A:Allocator {
     buf: CommandBuffer<A>
+}
+
+impl CommandEncoder<CmdBufAllocator> {
+    //TODO: Make `try` versions
+    pub fn new() -> CommandEncoder<CmdBufAllocator> {
+        CommandEncoder {
+            buf: CommandBuffer {
+                buf: Vec::new_in(CmdBufAllocator)
+            }
+        }
+    }
+    pub fn new_with_capacity(capacity: usize) -> CommandEncoder<CmdBufAllocator> {
+        CommandEncoder {
+            buf: CommandBuffer {
+                buf: Vec::with_capacity_in(capacity,CmdBufAllocator)
+            }
+        }
+    }
+}
+
+#[derive(Clone, Copy)]
+pub struct CmdBufAllocator;
+
+unsafe impl Allocator for CmdBufAllocator {
+    fn allocate(
+        &self,
+        layout: std::alloc::Layout,
+    ) -> Result<std::ptr::NonNull<[u8]>, std::alloc::AllocError> {
+        let layout = layout.align_to(0x10).expect("Could not 0x10 Byte align Command Buffer").pad_to_align();
+        LinearAllocator.allocate(layout)
+    }
+
+    unsafe fn deallocate(&self, ptr: std::ptr::NonNull<u8>, layout: std::alloc::Layout) {
+        let layout = layout.align_to(0x10).expect("Could not 0x10 Byte align Command Buffer").pad_to_align();
+        unsafe {LinearAllocator.deallocate(ptr,layout);}
+    }
 }
 
 pub trait GpuCmd {
@@ -72,6 +117,18 @@ impl<T:GpuCmdDisableByMut,A:Allocator> std::ops::Sub<T> for CommandEncoder<A> {
     }
 }
 
+#[derive(Clone, Copy)]
+pub struct Finish;
+
+impl<A:Allocator> std::ops::Add<Finish> for CommandEncoder<A> {
+    type Output = CommandBuffer<A>;
+    fn add(self, rhs: Finish) -> Self::Output {
+        use ctru_sys::*;
+        let mut buf = self.buf;
+        buf.buf.extend_from_slice(&[0x12345678,GPUREG_FINALIZE | mask(0xF)]);
+        buf
+    }
+}
 
 #[derive(Clone, Copy)]
 pub struct Cons<A,B>(A,B);
@@ -95,14 +152,28 @@ impl<A:GpuCmdByMut,B:GpuCmdDisableByMut> GpuCmdByMut for ConsNeg<A,B> {
 }
 
 impl<A:GpuCmdByMut,B:GpuCmdByMut,C:GpuCmdByMut> std::ops::Add<C> for Cons<A,B> {
-    type Output = Cons<Cons<A,B>,C>;
+    type Output = Cons<Self,C>;
     fn add(self, rhs: C) -> Self::Output {
         Cons(self,rhs)
     }
 }
 
 impl<A:GpuCmdByMut,B:GpuCmdByMut,C:GpuCmdDisableByMut> std::ops::Sub<C> for Cons<A,B> {
-    type Output = ConsNeg<Cons<A,B>,C>;
+    type Output = ConsNeg<Self,C>;
+    fn sub(self, rhs: C) -> Self::Output {
+        ConsNeg(self,rhs)
+    }
+}
+
+impl<A:GpuCmdByMut,B:GpuCmdByMut,C:GpuCmdByMut> std::ops::Add<C> for ConsNeg<A,B> {
+    type Output = Cons<Self,C>;
+    fn add(self, rhs: C) -> Self::Output {
+        Cons(self,rhs)
+    }
+}
+
+impl<A:GpuCmdByMut,B:GpuCmdByMut,C:GpuCmdDisableByMut> std::ops::Sub<C> for ConsNeg<A,B> {
+    type Output = ConsNeg<Self,C>;
     fn sub(self, rhs: C) -> Self::Output {
         ConsNeg(self,rhs)
     }
