@@ -44,10 +44,12 @@ fn main() {
             normquat_or_view: false,
         }
     };
+    let mut shader_entrypoint = None;
     let some_shader = {
         use shader::*;
-        Builder::new() + mov(outpos, inpos) + mov(outclr, inclr) + end()
+        Builder::new() + Label(&mut shader_entrypoint) + mov(outpos, inpos) + mov(outclr, inclr) + end()
     };
+    let shader_entrypoint = shader_entrypoint.unwrap();
     let q = queue::Queue{};
     let some_command = {
         use gpucmd::{CommandEncoder, alpha, cull_face, depth_map, misc, primitive,Finish};
@@ -64,11 +66,13 @@ fn main() {
             )
             + (some_shader, shader::VSH)
             + outmap
+            + misc::VshEntrypoint(shader_entrypoint)
             + primitive::Config {outmap_total_minus_1: 1,primitive_mode: primitive::Mode::Triangles}
             + misc::NumAttr(2)
             + Finish
     };
-    q.submit(&some_command);
+    q.submit(&some_command).expect("Could not submit command buffer to queue");
+    //TODO: Create Render Buffer
     let some_other_command = {
         use gpucmd::{CommandEncoder,misc,fixed_attrib,Finish};
         use floater::f32x4tof24x4;

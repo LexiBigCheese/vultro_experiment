@@ -85,3 +85,17 @@ impl GpuCmd for FlushFramebuffer {
         ]
     }
 }
+
+#[derive(Clone,Copy)]
+pub(crate) struct VshEntrypoint(pub(crate) u32);
+
+impl GpuCmd for VshEntrypoint {
+    type Out = [u32;2];
+
+    fn cmd(self) -> Self::Out {
+        [
+            self.0,
+            GPUREG_VSH_ENTRYPOINT | mask(0xF)
+        ]
+    }
+}

@@ -9,6 +9,7 @@ pub type GxCommand = [u32; 8];
 ///Queue of GX Commands
 pub struct Queue {}
 
+#[derive(Clone,Debug)]
 pub enum Error {
     TooManyCommands,
     Unknown,
