@@ -90,7 +90,11 @@ impl Builder {
         }
     }
     pub fn new() -> Self {
-        todo!()
+        Builder {
+            prog: Default::default(),
+            opdesc: Default::default(),
+            opdesc_map: Default::default()
+        }
     }
 }
 

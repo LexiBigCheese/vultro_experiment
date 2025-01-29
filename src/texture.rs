@@ -1,6 +1,4 @@
-use ctru::linear::LinearAllocator;
-
-use crate::{buffer::Buffer, vram::VramAllocator};
+use crate::buffer::Buffer;
 
 pub struct Texture {
     data: Buffer,

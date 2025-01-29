@@ -1,30 +1,41 @@
-use std::{
-    alloc::{AllocError, Allocator},
-    ptr::NonNull,
-};
+use std::ffi::c_void;
 
-#[derive(Copy, Clone, Default, Debug)]
-pub struct VramAllocator;
+pub fn free_space() -> u32 {
+    unsafe { ctru_sys::vramSpaceFree() }
+}
 
-impl VramAllocator {
-    pub fn free_space() -> u32 {
-        unsafe { ctru_sys::vramSpaceFree() }
+pub struct VramAllocation {
+    ptr: *mut c_void,
+}
+
+impl VramAllocation {
+    ///Will align to 0x80 bytes
+    pub fn new(size: usize) -> Option<VramAllocation> {
+        let ptr = unsafe { ctru_sys::vramAlloc(size) };
+        if ptr.is_null() {
+            None
+        } else {
+            Some(VramAllocation { ptr })
+        }
     }
 }
 
-unsafe impl Allocator for VramAllocator {
-    fn allocate(
-        &self,
-        layout: std::alloc::Layout,
-    ) -> Result<NonNull<[u8]>, AllocError> {
-        let pointer = unsafe { ctru_sys::vramMemAlign(layout.size(), layout.align()) };
-        NonNull::new(pointer.cast())
-            .map(|ptr| NonNull::slice_from_raw_parts(ptr, layout.size()))
-            .ok_or(AllocError)
+impl<T> Into<*mut T> for &VramAllocation {
+    fn into(self) -> *mut T {
+        self.ptr.cast()
     }
-    unsafe fn deallocate(&self, ptr: NonNull<u8>, _layout: std::alloc::Layout) {
+}
+
+impl<T> Into<*const T> for &VramAllocation {
+    fn into(self) -> *const T {
+        self.ptr.cast_const().cast()
+    }
+}
+
+impl Drop for VramAllocation {
+    fn drop(&mut self) {
         unsafe {
-            ctru_sys::vramFree(ptr.as_ptr().cast());
+            ctru_sys::vramFree(self.ptr);
         }
     }
 }
