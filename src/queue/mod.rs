@@ -3,7 +3,10 @@ use std::ffi::c_void;
 use ctru::services::gfx::RawFrameBuffer;
 use ctru_sys::gspSubmitGxCommand;
 
-use crate::{buffer::BufferSlice, renderbuffer::{dim, ColorBuffer}};
+use crate::{
+    buffer::BufferSlice,
+    renderbuffer::{ColorBuffer, dim},
+};
 
 pub type GxCommand = [u32; 8];
 
@@ -25,6 +28,7 @@ pub enum Error {
 impl Queue {
     pub unsafe fn submit_command(&self, command: impl Into<GxCommand>) -> Result<(), Error> {
         let command: GxCommand = command.into();
+        println!("Submitting {:x?}", command);
         match unsafe { gspSubmitGxCommand(command.as_ptr().cast()) } {
             0 => Ok(()),
             -2 => Err(Error::TooManyCommands),
@@ -50,7 +54,7 @@ impl Queue {
                 slice.as_ptr().cast(),
                 slice.len() * 4,
                 false,
-                true,
+                false,
             ))
         }
     }
@@ -69,6 +73,39 @@ impl Queue {
                 dim(fb.width as u32, fb.height as u32),
                 flags.into(),
             ))
+        }
+    }
+    pub fn fill_buffer(&self, mut bs: BufferSlice, val: FillValue) -> Result<(), Error> {
+        let (val, flag) = val.to();
+        unsafe {
+            self.submit_command(gx_memory_fill(
+                bs.start_addr(),
+                val,
+                bs.end_addr(),
+                flag,
+                0 as *mut c_void,
+                0,
+                0 as *const c_void,
+                0,
+            ))
+        }
+    }
+}
+
+#[derive(Clone, Copy)]
+pub enum FillValue {
+    N16(u32),
+    N24(u32),
+    N32(u32),
+}
+
+impl FillValue {
+    fn to(self) -> (u32, u32) {
+        match self {
+            //Note: the 1 is the Trigger Bit. without it, the transfer will never run.
+            FillValue::N16(x) => (x, 0x001),
+            FillValue::N24(x) => (x, 0x101),
+            FillValue::N32(x) => (x, 0x201),
         }
     }
 }
@@ -91,37 +128,40 @@ pub struct TransferFlags {
     pub output_color_format: TransferFormat,
     ///Use 32x32 block tiling mode, instead of the usual 8x8 one. Output dimensions must be multiples of 32, even if cropping with bit 2 set above
     pub block_tiling_mode: bool,
-    pub scale_down_filter: ScaleDownFilter
+    pub scale_down_filter: ScaleDownFilter,
 }
 
-#[derive(Clone,Copy)]
+#[derive(Clone, Copy)]
 #[repr(u32)]
 pub enum TransferFormat {
     RGBA8,
     RGB8,
     RGB565,
     RGB5A1,
-    RGBA4
+    RGBA4,
 }
-#[derive(Clone,Copy)]
+#[derive(Clone, Copy)]
 #[repr(u32)]
 pub enum ScaleDownFilter {
     None,
     DownX,
-    DownXY
+    DownXY,
 }
 impl Into<u32> for TransferFlags {
     fn into(self) -> u32 {
-        0
-        | if self.flip_vert {1} else {0}
-        | if self.tiled_out {1 << 1} else {0}
-        | if self.output_width_less_than_input_width {1 << 2} else {0}
-        | if self.texture_copy {1 << 3} else {0}
-        | if self.tiled_to_tiled {1 << 5} else {0}
-        | ((self.input_color_format as u32) << 8)
-        | ((self.output_color_format as u32) << 12)
-        | if self.block_tiling_mode {1 << 16} else {0}
-        | ((self.scale_down_filter as u32) << 24)
+        0 | if self.flip_vert { 1 } else { 0 }
+            | if self.tiled_out { 1 << 1 } else { 0 }
+            | if self.output_width_less_than_input_width {
+                1 << 2
+            } else {
+                0
+            }
+            | if self.texture_copy { 1 << 3 } else { 0 }
+            | if self.tiled_to_tiled { 1 << 5 } else { 0 }
+            | ((self.input_color_format as u32) << 8)
+            | ((self.output_color_format as u32) << 12)
+            | if self.block_tiling_mode { 1 << 16 } else { 0 }
+            | ((self.scale_down_filter as u32) << 24)
     }
 }
 
@@ -248,6 +288,7 @@ pub(crate) fn gx_flush_cache_regions(
     ]
 }
 
-pub(crate) const fn gx_cmd_head(cmd_id: u8, set_bit0: bool, fail_on_busy: bool) -> u32 {
-    (cmd_id as u32) | if set_bit0 { 1 << 16 } else { 0 } | if fail_on_busy { 1 << 24 } else { 0 }
+pub(crate) const fn gx_cmd_head(cmd_id: u8, _set_bit0: bool, _fail_on_busy: bool) -> u32 {
+    (cmd_id as u32) //| if set_bit0 { 1 << 16 } else { 0 } | if fail_on_busy { 1 << 24 } else { 0 }
+    | 0x01000100
 }

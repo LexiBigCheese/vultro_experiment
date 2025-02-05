@@ -22,7 +22,7 @@ impl Mask {
     pub const XYZW: Mask = Mask(true,true,true,true);
 }
 
-#[derive(Clone, Copy, PartialEq, Eq)]
+#[derive(Clone, Copy, PartialEq, Eq, Debug)]
 pub struct OpDesc {
     /// X, Y, Z, W
     dest: Mask,
@@ -71,6 +71,7 @@ impl std::hash::Hash for OpDesc {
     }
 }
 
+#[derive(Debug)]
 pub struct Builder {
     prog: Vec<u32>,
     opdesc: Vec<u64>,

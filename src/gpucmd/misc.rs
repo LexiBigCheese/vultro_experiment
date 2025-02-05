@@ -76,12 +76,14 @@ impl GpuCmd for ClearPostVertexCache {
 pub(crate) struct FlushFramebuffer;
 
 impl GpuCmd for FlushFramebuffer {
-    type Out = [u32;2];
+    type Out = [u32;4];
 
     fn cmd(self) -> Self::Out {
         [
             1,
-            GPUREG_FRAMEBUFFER_FLUSH | mask(0xF)
+            GPUREG_FRAMEBUFFER_FLUSH | mask(0xF),
+            1,
+            GPUREG_FRAMEBUFFER_INVALIDATE | mask(0xF)
         ]
     }
 }

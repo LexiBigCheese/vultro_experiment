@@ -17,6 +17,8 @@ impl Buffer {
             Self::Linear(unsafe {Box::new_uninit_slice_in(size,AlignedLinearAllocator).assume_init()})
         }
     }
+    ///Note: if you're slicing for the GSP, `x >> 3` happens, so slice on alignment (`assert_eq!(x % 8, 0)`)!
+    ///this entire module needs to be redone.
     pub fn slice<S: RangeBounds<usize> + std::slice::SliceIndex<[u8], Output = [u8]>>(&mut self, bounds: S) -> BufferSlice {
         match self {
             Buffer::Linear(x) => BufferSlice::Linear(&mut x[bounds]),
@@ -32,7 +34,7 @@ impl Buffer {
                     std::ops::Bound::Unbounded => *size,
                 };
                 assert!((0..(*size)).contains(&start));
-                assert!((0..(*size)).contains(&end));
+                assert!((0..=(*size)).contains(&end));
                 BufferSlice::Vram { addr: unsafe{ (*addr).byte_add(start) }, size: (end-start) }
             },
         }

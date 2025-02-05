@@ -126,6 +126,12 @@ impl<A:Allocator> std::ops::Add<Finish> for CommandEncoder<A> {
         use ctru_sys::*;
         let mut buf = self.buf;
         buf.buf.extend_from_slice(&[0x12345678,GPUREG_FINALIZE | mask(0xF)]);
+        if buf.buf.len() & 0x3 != 0 {
+            buf.buf.extend_from_slice(&[0x12345678,GPUREG_FINALIZE | mask(0xF)]);
+        }
+        if buf.buf.len() & 0x3 != 0 {
+            panic!("uhhhhh");
+        }
         buf
     }
 }
