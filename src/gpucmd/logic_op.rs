@@ -1,7 +1,7 @@
+use super::{GpuCmd, impl_gpucmd, mask};
 use ctru_sys::*;
-use super::{mask, GpuCmd};
 
-#[derive(Clone, Copy,PartialEq, Eq, Debug)]
+#[derive(Clone, Copy, PartialEq, Eq, Debug)]
 #[repr(u32)]
 pub enum LogicOp {
     /// `0`
@@ -35,14 +35,9 @@ pub enum LogicOp {
     /// `s | ~d`
     ReverseOr,
     /// `~s | d`
-    InvertedOr
+    InvertedOr,
 }
 
 pub use LogicOp::*;
 
-impl GpuCmd for LogicOp {
-    type Out = [u32;2];
-    fn cmd(self) -> Self::Out {
-        [self as u32,GPUREG_LOGIC_OP | mask(0xF)]
-    }
-}
+impl_gpucmd!(LogicOp, |this: LogicOp| this as u32, GPUREG_LOGIC_OP);

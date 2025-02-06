@@ -1,6 +1,6 @@
 use ctru_sys::{GPUREG_BLEND_FUNC, GPUREG_FRAGOP_ALPHA_TEST};
 
-use super::{mask, GpuCmd};
+use super::{GpuCmd, impl_gpucmd, mask};
 
 #[derive(Clone, Copy)]
 #[repr(u8)]
@@ -67,33 +67,23 @@ impl Blend {
     }
 }
 
-impl GpuCmd for Blend {
-    type Out = [u32; 2];
-
-    fn cmd(self) -> Self::Out {
-        [
-            u32::from_le_bytes([
-                self.color_eq as u8,
-                self.alpha_eq as u8,
-                self.color_src as u8 | ((self.color_dst as u8) << 4),
-                self.alpha_src as u8 | ((self.alpha_dst as u8) << 4),
-            ]),
-            GPUREG_BLEND_FUNC | mask(0xF),
-        ]
-    }
-}
+impl_gpucmd!(
+    Blend,
+    |this: Blend| u32::from_le_bytes([
+        this.color_eq as u8,
+        this.alpha_eq as u8,
+        this.color_src as u8 | ((this.color_dst as u8) << 4),
+        this.alpha_src as u8 | ((this.alpha_dst as u8) << 4),
+    ]),
+    GPUREG_BLEND_FUNC
+);
 
 #[derive(Clone, Copy)]
 pub struct Color(pub u32);
 
 const GPUREG_BLEND_COLOR: u32 = 0x0103;
 
-impl GpuCmd for Color {
-    type Out = [u32; 2];
-    fn cmd(self) -> Self::Out {
-        [self.0, GPUREG_BLEND_COLOR | mask(0xF)]
-    }
-}
+impl_gpucmd!(Color, |this: Color| this.0, GPUREG_BLEND_COLOR);
 
 #[derive(Clone, Copy)]
 #[repr(u32)]
@@ -127,14 +117,10 @@ impl Test {
     }
 }
 
-impl GpuCmd for Test {
-    type Out = [u32; 2];
-    fn cmd(self) -> Self::Out {
-        [
-            if self.enabled { 0 } else { 1 }
-                | ((self.function as u32) << 4)
-                | ((self.reference_value as u32) << 8),
-            GPUREG_FRAGOP_ALPHA_TEST | mask(0xF),
-        ]
-    }
-}
+impl_gpucmd!(
+    Test,
+    |this: Test| if this.enabled { 0 } else { 1 }
+        | ((this.function as u32) << 4)
+        | ((this.reference_value as u32) << 8),
+    GPUREG_FRAGOP_ALPHA_TEST
+);

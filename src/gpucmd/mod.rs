@@ -1,32 +1,64 @@
-pub mod depth_map;
-pub mod cull_face;
-pub mod shader_outmap;
 pub mod alpha;
-pub mod logic_op;
-pub mod color_operation;
-pub mod texenv;
-pub mod depth_color_mask;
-pub mod transfer;
 pub mod chain;
-pub mod geostage_config;
-pub mod primitive;
+pub mod color_operation;
+pub mod cull_face;
+pub mod depth_color_mask;
+pub mod depth_map;
 pub mod fixed_attrib;
+pub mod geostage_config;
+pub mod logic_op;
 pub mod misc;
+pub mod primitive;
+pub mod shader_outmap;
+pub mod texenv;
+pub mod transfer;
 
 use std::alloc::Allocator;
 
 use ctru::linear::LinearAllocator;
 
+/// Tiny lil' macro for implementing GpuCmd.
+macro_rules! impl_gpucmd {
+    ($name:ident,$value:expr,$reg:expr) => {
+        impl crate::gpucmd::GpuCmd for $name {
+            type Out = [u32; 2];
+            fn cmd(self) -> Self::Out {
+                [$value(self), $reg | crate::gpucmd::mask(0xF)]
+            }
+        }
+    };
+}
+pub(crate) use impl_gpucmd;
+
+/// Tiny lil' macro for implementing GpuCmdDisable.
+macro_rules! impl_gpucmd_disable {
+    ($name:ident,$value:expr,$reg:expr) => {
+        impl crate::gpucmd::GpuCmdDisable for $name {
+            type Out = [u32; 2];
+            fn cmd_disable(self) -> Self::Out {
+                [$value(self), $reg | crate::gpucmd::mask(0xF)]
+            }
+        }
+    };
+}
+pub(crate) use impl_gpucmd_disable;
+
 ///Note: The Buffer **MUST** be `0x10` bytes aligned!
 ///Note: The Buffer's SIZE **MUST ALSO** be `0x10` bytes aligned!
 #[derive(Clone)]
-pub struct CommandBuffer<A> where A:Allocator {
-    pub buf: Vec<u32,A>
+pub struct CommandBuffer<A>
+where
+    A: Allocator,
+{
+    pub buf: Vec<u32, A>,
 }
 
 #[derive(Clone)]
-pub struct CommandEncoder<A> where A:Allocator {
-    buf: CommandBuffer<A>
+pub struct CommandEncoder<A>
+where
+    A: Allocator,
+{
+    buf: CommandBuffer<A>,
 }
 
 impl CommandEncoder<CmdBufAllocator> {
@@ -34,15 +66,15 @@ impl CommandEncoder<CmdBufAllocator> {
     pub fn new() -> CommandEncoder<CmdBufAllocator> {
         CommandEncoder {
             buf: CommandBuffer {
-                buf: Vec::new_in(CmdBufAllocator)
-            }
+                buf: Vec::new_in(CmdBufAllocator),
+            },
         }
     }
     pub fn new_with_capacity(capacity: usize) -> CommandEncoder<CmdBufAllocator> {
         CommandEncoder {
             buf: CommandBuffer {
-                buf: Vec::with_capacity_in(capacity,CmdBufAllocator)
-            }
+                buf: Vec::with_capacity_in(capacity, CmdBufAllocator),
+            },
         }
     }
 }
@@ -55,13 +87,21 @@ unsafe impl Allocator for CmdBufAllocator {
         &self,
         layout: std::alloc::Layout,
     ) -> Result<std::ptr::NonNull<[u8]>, std::alloc::AllocError> {
-        let layout = layout.align_to(0x10).expect("Could not 0x10 Byte align Command Buffer").pad_to_align();
+        let layout = layout
+            .align_to(0x10)
+            .expect("Could not 0x10 Byte align Command Buffer")
+            .pad_to_align();
         LinearAllocator.allocate(layout)
     }
 
     unsafe fn deallocate(&self, ptr: std::ptr::NonNull<u8>, layout: std::alloc::Layout) {
-        let layout = layout.align_to(0x10).expect("Could not 0x10 Byte align Command Buffer").pad_to_align();
-        unsafe {LinearAllocator.deallocate(ptr,layout);}
+        let layout = layout
+            .align_to(0x10)
+            .expect("Could not 0x10 Byte align Command Buffer")
+            .pad_to_align();
+        unsafe {
+            LinearAllocator.deallocate(ptr, layout);
+        }
     }
 }
 
@@ -76,26 +116,26 @@ pub trait GpuCmdDisable {
 }
 
 pub trait GpuCmdByMut {
-    fn cmd_by_mut<A:Allocator>(self, buf: &mut Vec<u32,A>);
+    fn cmd_by_mut<A: Allocator>(self, buf: &mut Vec<u32, A>);
 }
 
-impl<C:GpuCmd> GpuCmdByMut for C {
-    fn cmd_by_mut<A:Allocator>(self, buf: &mut Vec<u32,A>) {
+impl<C: GpuCmd> GpuCmdByMut for C {
+    fn cmd_by_mut<A: Allocator>(self, buf: &mut Vec<u32, A>) {
         buf.extend_from_slice(self.cmd().as_ref());
     }
 }
 
 pub trait GpuCmdDisableByMut {
-    fn cmd_disable_by_mut<A:Allocator>(self, buf: &mut Vec<u32,A>);
+    fn cmd_disable_by_mut<A: Allocator>(self, buf: &mut Vec<u32, A>);
 }
 
-impl<C:GpuCmdDisable> GpuCmdDisableByMut for C {
-    fn cmd_disable_by_mut<A:Allocator>(self, buf: &mut Vec<u32,A>) {
+impl<C: GpuCmdDisable> GpuCmdDisableByMut for C {
+    fn cmd_disable_by_mut<A: Allocator>(self, buf: &mut Vec<u32, A>) {
         buf.extend_from_slice(self.cmd_disable().as_ref());
     }
 }
 
-impl<T:GpuCmdByMut,A:Allocator> std::ops::Add<T> for CommandEncoder<A> {
+impl<T: GpuCmdByMut, A: Allocator> std::ops::Add<T> for CommandEncoder<A> {
     type Output = CommandEncoder<A>;
     fn add(mut self, rhs: T) -> Self::Output {
         rhs.cmd_by_mut(&mut self.buf.buf);
@@ -103,13 +143,13 @@ impl<T:GpuCmdByMut,A:Allocator> std::ops::Add<T> for CommandEncoder<A> {
     }
 }
 
-impl<T:GpuCmdByMut,A:Allocator> std::ops::AddAssign<T> for CommandEncoder<A> {
+impl<T: GpuCmdByMut, A: Allocator> std::ops::AddAssign<T> for CommandEncoder<A> {
     fn add_assign(&mut self, rhs: T) {
         rhs.cmd_by_mut(&mut self.buf.buf);
     }
 }
 
-impl<T:GpuCmdDisableByMut,A:Allocator> std::ops::Sub<T> for CommandEncoder<A> {
+impl<T: GpuCmdDisableByMut, A: Allocator> std::ops::Sub<T> for CommandEncoder<A> {
     type Output = CommandEncoder<A>;
     fn sub(mut self, rhs: T) -> Self::Output {
         rhs.cmd_disable_by_mut(&mut self.buf.buf);
@@ -120,14 +160,16 @@ impl<T:GpuCmdDisableByMut,A:Allocator> std::ops::Sub<T> for CommandEncoder<A> {
 #[derive(Clone, Copy)]
 pub struct Finish;
 
-impl<A:Allocator> std::ops::Add<Finish> for CommandEncoder<A> {
+impl<A: Allocator> std::ops::Add<Finish> for CommandEncoder<A> {
     type Output = CommandBuffer<A>;
     fn add(self, rhs: Finish) -> Self::Output {
         use ctru_sys::*;
         let mut buf = self.buf;
-        buf.buf.extend_from_slice(&[0x12345678,GPUREG_FINALIZE | mask(0xF)]);
+        buf.buf
+            .extend_from_slice(&[0x12345678, GPUREG_FINALIZE | mask(0xF)]);
         if buf.buf.len() & 0x3 != 0 {
-            buf.buf.extend_from_slice(&[0x12345678,GPUREG_FINALIZE | mask(0xF)]);
+            buf.buf
+                .extend_from_slice(&[0x12345678, GPUREG_FINALIZE | mask(0xF)]);
         }
         if buf.buf.len() & 0x3 != 0 {
             panic!("uhhhhh");
@@ -137,72 +179,72 @@ impl<A:Allocator> std::ops::Add<Finish> for CommandEncoder<A> {
 }
 
 #[derive(Clone, Copy)]
-pub struct Cons<A,B>(A,B);
+pub struct Cons<A, B>(A, B);
 #[derive(Clone, Copy)]
-pub struct ConsNeg<A,B>(A,B);
+pub struct ConsNeg<A, B>(A, B);
 #[derive(Clone, Copy)]
 pub struct Root;
 
-impl<A:GpuCmdByMut,B:GpuCmdByMut> GpuCmdByMut for Cons<A,B> {
-    fn cmd_by_mut<Alloc:Allocator>(self, buf: &mut Vec<u32,Alloc>) {
+impl<A: GpuCmdByMut, B: GpuCmdByMut> GpuCmdByMut for Cons<A, B> {
+    fn cmd_by_mut<Alloc: Allocator>(self, buf: &mut Vec<u32, Alloc>) {
         self.0.cmd_by_mut(buf);
         self.1.cmd_by_mut(buf);
     }
 }
 
-impl<A:GpuCmdByMut,B:GpuCmdDisableByMut> GpuCmdByMut for ConsNeg<A,B> {
-    fn cmd_by_mut<Alloc:Allocator>(self, buf: &mut Vec<u32,Alloc>) {
+impl<A: GpuCmdByMut, B: GpuCmdDisableByMut> GpuCmdByMut for ConsNeg<A, B> {
+    fn cmd_by_mut<Alloc: Allocator>(self, buf: &mut Vec<u32, Alloc>) {
         self.0.cmd_by_mut(buf);
         self.1.cmd_disable_by_mut(buf);
     }
 }
 
-impl<A:GpuCmdByMut,B:GpuCmdByMut,C:GpuCmdByMut> std::ops::Add<C> for Cons<A,B> {
-    type Output = Cons<Self,C>;
+impl<A: GpuCmdByMut, B: GpuCmdByMut, C: GpuCmdByMut> std::ops::Add<C> for Cons<A, B> {
+    type Output = Cons<Self, C>;
     fn add(self, rhs: C) -> Self::Output {
-        Cons(self,rhs)
+        Cons(self, rhs)
     }
 }
 
-impl<A:GpuCmdByMut,B:GpuCmdByMut,C:GpuCmdDisableByMut> std::ops::Sub<C> for Cons<A,B> {
-    type Output = ConsNeg<Self,C>;
+impl<A: GpuCmdByMut, B: GpuCmdByMut, C: GpuCmdDisableByMut> std::ops::Sub<C> for Cons<A, B> {
+    type Output = ConsNeg<Self, C>;
     fn sub(self, rhs: C) -> Self::Output {
-        ConsNeg(self,rhs)
+        ConsNeg(self, rhs)
     }
 }
 
-impl<A:GpuCmdByMut,B:GpuCmdByMut,C:GpuCmdByMut> std::ops::Add<C> for ConsNeg<A,B> {
-    type Output = Cons<Self,C>;
+impl<A: GpuCmdByMut, B: GpuCmdByMut, C: GpuCmdByMut> std::ops::Add<C> for ConsNeg<A, B> {
+    type Output = Cons<Self, C>;
     fn add(self, rhs: C) -> Self::Output {
-        Cons(self,rhs)
+        Cons(self, rhs)
     }
 }
 
-impl<A:GpuCmdByMut,B:GpuCmdByMut,C:GpuCmdDisableByMut> std::ops::Sub<C> for ConsNeg<A,B> {
-    type Output = ConsNeg<Self,C>;
+impl<A: GpuCmdByMut, B: GpuCmdByMut, C: GpuCmdDisableByMut> std::ops::Sub<C> for ConsNeg<A, B> {
+    type Output = ConsNeg<Self, C>;
     fn sub(self, rhs: C) -> Self::Output {
-        ConsNeg(self,rhs)
+        ConsNeg(self, rhs)
     }
 }
 
 impl GpuCmd for Root {
-    type Out = [u32;0];
+    type Out = [u32; 0];
     fn cmd(self) -> Self::Out {
         []
     }
 }
 
-impl<A:GpuCmdByMut> std::ops::Add<A> for Root {
-    type Output = Cons<Root,A>;
+impl<A: GpuCmdByMut> std::ops::Add<A> for Root {
+    type Output = Cons<Root, A>;
     fn add(self, rhs: A) -> Self::Output {
-        Cons(Root,rhs)
+        Cons(Root, rhs)
     }
 }
 
-impl<A:GpuCmdDisableByMut> std::ops::Sub<A> for Root {
-    type Output = ConsNeg<Root,A>;
+impl<A: GpuCmdDisableByMut> std::ops::Sub<A> for Root {
+    type Output = ConsNeg<Root, A>;
     fn sub(self, rhs: A) -> Self::Output {
-        ConsNeg(Root,rhs)
+        ConsNeg(Root, rhs)
     }
 }
 
