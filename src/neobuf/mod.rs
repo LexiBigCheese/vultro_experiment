@@ -76,6 +76,15 @@ pub struct LinearBuf<T> {
     ptr: *mut T,
     len: usize,
 }
+
+impl<T> LinearBuf<T> {
+    pub unsafe fn map(&self) -> &[T] {
+        unsafe { std::slice::from_raw_parts(self.ptr.cast_const(), self.len) }
+    }
+    pub unsafe fn map_mut(&mut self) -> &mut [T] {
+        unsafe { std::slice::from_raw_parts_mut(self.ptr, self.len) }
+    }
+}
 pub struct VramBuf<T> {
     ptr: *mut T,
     len: usize,
@@ -197,6 +206,9 @@ pub struct LinearSliceMut<'a, T> {
 impl<'a, T> LinearSliceMut<'a, T> {
     pub unsafe fn map(self) -> &'a [T] {
         unsafe { std::slice::from_raw_parts(self.ptr.cast_const(), self.len) }
+    }
+    pub unsafe fn map_mut(self) -> &'a mut [T] {
+        unsafe { std::slice::from_raw_parts_mut(self.ptr, self.len) }
     }
 }
 
