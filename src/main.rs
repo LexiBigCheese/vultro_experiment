@@ -5,20 +5,22 @@
 pub mod buffer;
 pub mod floater;
 pub mod gpucmd;
+pub mod neobuf;
+pub mod other_main;
 pub mod queue;
 pub mod renderbuffer;
 pub mod shader;
 pub mod shader_unfun;
 pub mod texture;
 pub mod vram;
-pub mod other_main;
-pub mod neobuf;
 
 use ctru::{
     prelude::*,
     services::gfx::{Flush, Screen, Swap},
 };
-use ctru_sys::{gspWaitForAnyEvent, GSPGPU_TriggerCmdReqQueue};
+use ctru_sys::{GSPGPU_TriggerCmdReqQueue, gspWaitForAnyEvent};
+
+use neobuf::{NeoSlice, NeoSliceMut};
 
 fn main() {
     let mut soc = Soc::new().expect("No Soc");
@@ -39,11 +41,20 @@ fn main() {
         renderbuffer::ColorBuffer::new(240, 320, renderbuffer::ColorFormat::RGBA8)
             .expect("No ColorBuffer");
     let q = queue::Queue {};
-    let mut some_buf = buffer::Buffer::new(64,true);
-    q.fill_buffer(some_buf.slice(..), queue::FillValue::N32(0x12ABCDEF)).expect("couldn't memfill");
+    let mut some_buf = neobuf::VramBuf::<u32>::new(320 * 240);
+    q.fill_buffer(
+        some_buf.slice_aligned_8_mut(..).expect("Could not slice"),
+        queue::FillValue::N32(0x12ABCDEF),
+    )
+    .expect("couldn't memfill");
     ctru::services::gspgpu::wait_for_event(ctru::services::gspgpu::Event::Psc0, false);
-    let mut other_buf = buffer::Buffer::new(64,false);
-    q.copy_buffer(some_buf.slice(..), other_buf.slice(..), true).expect("couldn't memcpy");
+    let mut other_buf = neobuf::LinearBuf::<u32>::new(320 * 240);
+    q.copy_buffer(
+        some_buf.slice(..).expect("Could not slice"),
+        other_buf.slice_mut(..).expect("Could not slice"),
+        true,
+    )
+    .expect("couldn't memcpy");
     ctru::services::gspgpu::wait_for_event(ctru::services::gspgpu::Event::DMA, false);
     while apt.main_loop() {
         hid.scan_input();
@@ -51,13 +62,39 @@ fn main() {
             break;
         }
         if hid.keys_down().contains(KeyPad::A) {
-            let mut whole_buf = other_buf.slice(..);
+            let mut whole_buf = &other_buf;
             unsafe {
-                ctru_sys::GSPGPU_FlushDataCache(whole_buf.start_addr(), whole_buf.size() as u32);
-                ctru_sys::GSPGPU_InvalidateDataCache(whole_buf.start_addr(), whole_buf.size() as u32);
+                ctru_sys::GSPGPU_FlushDataCache(
+                    whole_buf.ptr().cast_const().cast(),
+                    whole_buf.len() as u32,
+                );
+                ctru_sys::GSPGPU_InvalidateDataCache(
+                    whole_buf.ptr().cast_const().cast(),
+                    whole_buf.len() as u32,
+                );
             }
-            let Some(mapped) = whole_buf.map_mut() else {return};
-            println!("{:x?}",mapped);
+            let mapped = unsafe { whole_buf.map() };
+            q.display_transfer_to_fb(
+                some_buf.slice(..).expect("Could not slice"),
+                240,
+                320,
+                bottom_screen.raw_framebuffer(),
+                queue::TransferFlags {
+                    block_tiling_mode: false,
+                    tiled_out: false,
+                    flip_vert: false,
+                    input_color_format: queue::TransferFormat::RGBA8,
+                    output_color_format: queue::TransferFormat::RGBA8,
+                    output_width_less_than_input_width: false,
+                    scale_down_filter: queue::ScaleDownFilter::None,
+                    texture_copy: false,
+                    tiled_to_tiled: false,
+                },
+            )
+            .expect("Could not DisplayTransfer");
+            ctru::services::gspgpu::wait_for_event(ctru::services::gspgpu::Event::PPF, false);
+            bottom_screen.flush_buffers();
+            bottom_screen.swap_buffers();
             // for v in mapped {
             //     let the_ptr = v as *mut u8;
             //     println!("{}",unsafe {the_ptr.read_volatile()})

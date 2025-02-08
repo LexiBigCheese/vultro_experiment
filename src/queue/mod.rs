@@ -6,6 +6,7 @@ use ctru_sys::gspSubmitGxCommand;
 use crate::{
     buffer::BufferSlice,
     renderbuffer::{ColorBuffer, dim},
+    neobuf
 };
 
 pub type GxCommand = [u32; 8];
@@ -35,14 +36,15 @@ impl Queue {
             _ => Err(Error::Unknown),
         }
     }
-    pub fn copy_buffer(
+    ///NOTICE: Align 8
+    pub fn copy_buffer<'a,'b>(
         &self,
-        mut src: BufferSlice,
-        mut dst: BufferSlice,
+        src: impl neobuf::LinearOrVram<'a>,
+        dst: impl neobuf::LinearOrVramMut<'b>,
         flush: bool,
     ) -> Result<(), Error> {
-        let size = src.size().min(dst.size());
-        unsafe { self.submit_command(gx_dma(src.start_addr(), dst.start_addr(), size, flush)) }
+        let size = src.len().min(dst.len());
+        unsafe { self.submit_command(gx_dma(src.ptr().cast_const().cast(), dst.ptr().cast(), size, flush)) }
     }
     pub fn submit(
         &self,
@@ -75,13 +77,31 @@ impl Queue {
             ))
         }
     }
-    pub fn fill_buffer(&self, mut bs: BufferSlice, val: FillValue) -> Result<(), Error> {
+    pub fn display_transfer_to_fb<'a>(
+        &self,
+        buf: impl neobuf::LinearOrVram<'a>,
+        width: u32,
+        height: u32,
+        fb: RawFrameBuffer,
+        flags: TransferFlags,
+    ) -> Result<(), Error> {
+        unsafe {
+            self.submit_command(gx_display_transfer(
+                buf.ptr().cast_const().cast(),
+                dim(width,height),
+                fb.ptr.cast(),
+                dim(fb.width as u32, fb.height as u32),
+                flags.into(),
+            ))
+        }
+    }
+    pub fn fill_buffer<'a>(&self, bs: impl neobuf::VramMut<'a>, val: FillValue) -> Result<(), Error> {
         let (val, flag) = val.to();
         unsafe {
             self.submit_command(gx_memory_fill(
-                bs.start_addr(),
+                bs.ptr().cast(),
                 val,
-                bs.end_addr(),
+                bs.end_ptr().cast_const().cast(),
                 flag,
                 0 as *mut c_void,
                 0,

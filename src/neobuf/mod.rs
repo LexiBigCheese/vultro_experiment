@@ -7,9 +7,12 @@ use std::ops::RangeBounds;
 pub trait NeoSlice<'a> {
     type T;
     type Slice: NeoSliceCons<'a, T = Self::T>;
-    fn ptr(&'a self) -> *mut Self::T;
-    fn len(&'a self) -> usize;
-    fn slice_internal<S: RangeBounds<usize>>(&'a self, bounds: S) -> Option<(*mut Self::T, usize)> {
+    fn ptr(&self) -> *mut Self::T;
+    fn len(&self) -> usize;
+    fn end_ptr(&self) -> *mut Self::T {
+        unsafe {self.ptr().add(self.len())}
+    }
+    fn slice_internal<S: RangeBounds<usize>>(&self, bounds: S) -> Option<(*mut Self::T, usize)> {
         let ptr = self.ptr();
         let len = self.len();
         let start = match bounds.start_bound() {
@@ -31,7 +34,7 @@ pub trait NeoSlice<'a> {
         Some((unsafe { ptr.add(start) }, end - start))
     }
     fn slice_aligned_8_internal<S: RangeBounds<usize>>(
-        &'a self,
+        &self,
         bounds: S,
     ) -> Option<(*mut Self::T, usize)> {
         let sliced = self.slice_internal(bounds)?;
@@ -43,11 +46,11 @@ pub trait NeoSlice<'a> {
         }
         Some(sliced)
     }
-    fn slice<S: RangeBounds<usize>>(&'a self, bounds: S) -> Option<Self::Slice> {
+    fn slice<S: RangeBounds<usize>>(&self, bounds: S) -> Option<Self::Slice> {
         let sliced = self.slice_internal(bounds)?;
         Some(Self::Slice::neo_slice_cons(sliced.0, sliced.1))
     }
-    fn slice_aligned_8<S: RangeBounds<usize>>(&'a self, bounds: S) -> Option<Self::Slice> {
+    fn slice_aligned_8<S: RangeBounds<usize>>(&self, bounds: S) -> Option<Self::Slice> {
         let sliced = self.slice_aligned_8_internal(bounds)?;
         Some(Self::Slice::neo_slice_cons(sliced.0, sliced.1))
     }
@@ -55,12 +58,12 @@ pub trait NeoSlice<'a> {
 
 pub trait NeoSliceMut<'a>: NeoSlice<'a> {
     type SliceMut: NeoSliceCons<'a, T = Self::T>;
-    fn slice_mut<S: RangeBounds<usize>>(&'a mut self, bounds: S) -> Option<Self::SliceMut> {
+    fn slice_mut<S: RangeBounds<usize>>(&mut self, bounds: S) -> Option<Self::SliceMut> {
         let sliced = self.slice_internal(bounds)?;
         Some(Self::SliceMut::neo_slice_cons(sliced.0, sliced.1))
     }
     fn slice_aligned_8_mut<S: RangeBounds<usize>>(
-        &'a mut self,
+        &mut self,
         bounds: S,
     ) -> Option<Self::SliceMut> {
         let sliced = self.slice_aligned_8_internal(bounds)?;
@@ -84,10 +87,22 @@ impl<T> LinearBuf<T> {
     pub unsafe fn map_mut(&mut self) -> &mut [T] {
         unsafe { std::slice::from_raw_parts_mut(self.ptr, self.len) }
     }
+    pub fn new(size: usize) -> Self {
+        unsafe {
+            LinearBuf{ ptr: ctru_sys::linearAlloc(std::mem::size_of::<T>() * size).cast(), len:size }
+        }
+    }
 }
 pub struct VramBuf<T> {
     ptr: *mut T,
     len: usize,
+}
+impl<T> VramBuf<T> {
+    pub fn new(size: usize) -> Self {
+        unsafe {
+            VramBuf{ ptr: ctru_sys::vramAlloc(std::mem::size_of::<T>() * size).cast(), len:size }
+        }
+    }
 }
 
 impl<'a, T: 'a> NeoSlice<'a> for LinearBuf<T> {
@@ -273,17 +288,17 @@ pub trait LinearOrVramMut<'a>: NeoSliceMut<'a> {}
 
 impl<'a,T:'a> LinearOrVramMut<'a> for LinearBuf<T> {}
 impl<'a,T:'a> LinearOrVramMut<'a> for VramBuf<T> {}
-impl<'a,T:'a> LinearOrVramMut<'a> for LinearSliceMut<'a,T> {}
-impl<'a,T:'a> LinearOrVramMut<'a> for VramSliceMut<'a,T> {}
+impl<'a,T> LinearOrVramMut<'a> for LinearSliceMut<'a,T> {}
+impl<'a,T> LinearOrVramMut<'a> for VramSliceMut<'a,T> {}
 
 pub trait LinearOrVram<'a>: NeoSlice<'a> {}
 
-impl<'a,T:'a> LinearOrVram<'a> for LinearBuf<T> {}
-impl<'a,T:'a> LinearOrVram<'a> for VramBuf<T> {}
-impl<'a,T:'a> LinearOrVram<'a> for LinearSliceMut<'a,T> {}
-impl<'a,T:'a> LinearOrVram<'a> for VramSliceMut<'a,T> {}
-impl<'a,T:'a> LinearOrVram<'a> for LinearSlice<'a,T> {}
-impl<'a,T:'a> LinearOrVram<'a> for VramSlice<'a,T> {}
+impl<'a,T: 'a> LinearOrVram<'a> for LinearBuf<T> {}
+impl<'a,T: 'a> LinearOrVram<'a> for VramBuf<T> {}
+impl<'a,T> LinearOrVram<'a> for LinearSliceMut<'a,T> {}
+impl<'a,T> LinearOrVram<'a> for VramSliceMut<'a,T> {}
+impl<'a,T> LinearOrVram<'a> for LinearSlice<'a,T> {}
+impl<'a,T> LinearOrVram<'a> for VramSlice<'a,T> {}
 
 pub trait LinearMut<'a>: NeoSliceMut<'a> {}
 
